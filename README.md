@@ -1,2 +1,2 @@
 # UNO-java
-A recreation of the card game UNO using Java
+A recreation of the card game UNO using Java with Ant
