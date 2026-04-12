@@ -1,20 +1,15 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Main.java to edit this template
- */
 package uno.java;
 
-/**
- *
- * @author riech
- */
 public class UNOJava {
-
-    /**
-     * @param args the command line arguments
-     */
     public static void main(String[] args) {
-        // TODO code application logic here
+        Card c1 = Card.numberCard(Color.RED, 5);
+        Card c2 = Card.actionCard(Color.BLUE, Type.SKIP);
+        Card c3 = Card.wildCard();
+        Card c4 = Card.drawFourCard();
+
+        System.out.println(c1);
+        System.out.println(c2);
+        System.out.println(c3);
+        System.out.println(c4);
     }
-    
 }
