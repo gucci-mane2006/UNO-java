@@ -1,11 +1,11 @@
 package uno.java;
 
-// Private constructor - use the below factories to instantiate cards instead
 public final class Card {
     private final Color color;
     private final Type type;
     private final Integer number; // null for non-numbered cards
 
+    // Private constructor - use the below factories to instantiate cards instead
     private Card (Color color, Type type, Integer number) {
         this.color = color;
         this.type = type;
