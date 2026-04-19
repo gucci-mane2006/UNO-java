@@ -6,7 +6,7 @@ public class Deck {
     private Deque<Card> drawPile;
     private Deque<Card> discardPile;
 
-    private final int DECK_SIZE = 108;
+    private static final int DECK_SIZE = 108;
 
     public Deck() {
         initialiseDeck();
