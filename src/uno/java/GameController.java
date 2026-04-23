@@ -23,7 +23,7 @@ public class GameController {
     */
 
     public void startGame() {
-        
+        state.setPhase(GamePhase.IN_PROGRESS);
 
     }
     
