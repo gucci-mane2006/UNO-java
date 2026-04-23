@@ -23,10 +23,12 @@ public class GameController {
     */
 
     public void startGame() {
+        
 
     }
     
     public void callUno() {
+        this.unoCalledThisTurn = true; //uno called true
 
     }
 
@@ -37,9 +39,45 @@ public class GameController {
     */
 
     // Round loop
-    private void playRound() {}
+    private void playRound() {
+        state.setPhase(GamePhase.IN_PROGRESS);
+        while (!state.isRoundOver()) playTurn();
+        state.setPhase(GamePhase.ROUND_OVER);
+    }
     
-    private void playTurn() {}
+    private void playTurn() {
+        Player current = state.getCurrentPlayer();
+        Card played = current.takeTurn(state);
+        if (played == null) {
+            Card drawn = deck.draw();
+            current.addCard(drawn);
+            if (state.isCardPlayable(drawn)) {
+                current.removeCard(drawn);
+                playCard(drawn, current);
+            } else {
+                advancePlayer(1);
+                unoCalledThisTurn = false;
+            }
+        } else {
+            if (!current.removeCard(played)) throw new IllegalStateException("Player attempted to play a card they don't have");
+            playCard(played, current);
+        }
+        checkUno(current);
+    }
+    private void playCard(Card card, Player player) {
+        deck.discard(card);
+        state.setTopCard(card);
+        if (card.getType().isWildType()) {
+            Color chosenColor = (player instanceof PlayerAI)
+                ? ((PlayerAI) player).getStrategy().chooseColor(player.getHand())
+                : Color.RED;
+            state.setCurrentColor(chosenColor);
+        } else {
+            state.setCurrentColor(card.getColor());
+        }
+        applyCardEffect(card, player);
+        if (!state.isRoundOver()) advancePlayer(1);
+    }
 
     // Card effects
     private void applyCardEffect(Card card, Player player) {}
@@ -64,6 +102,7 @@ public class GameController {
             // TODO: event for uno penalty
             handleDraw(player, 2);
         }
+        unoCalledThisTurn = false;
     }
 
     // Color resolution
@@ -73,5 +112,8 @@ public class GameController {
     // Helpers
     private void dealInitialHands() {
         // stub for now
+        for (int i = 0; i < 7; i++) 
+            for (Player p : state.getPlayers()) p.addCard(deck.draw());
     }
+    
 }
