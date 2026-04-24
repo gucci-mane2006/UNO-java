@@ -37,6 +37,7 @@ public class GameState {
     public Player getCurrentPlayer()    { return players.get(currentPlayerIndex); }
     public List<Player> getPlayers()    { return Collections.unmodifiableList(players); }
     public int getCurrentPlayerIndex()  { return currentPlayerIndex; }
+    public int getTargetScore()         { return targetScore; }
     public Card getTopCard()            { return topCard; }
     public Color getCurrentColor()      { return currentColor; }
     public boolean isClockwise()        { return clockwise; }

@@ -10,12 +10,11 @@ public class PlayerHuman extends Player {
         if (inputHandler == null) throw new IllegalArgumentException("InputHandler cannot be null");
         this.inputHandler = inputHandler;
     }
-
+    
+    public InputHandler getInputHandler() { return inputHandler; }
+    
     @Override
     public Card takeTurn(GameState state) {
-        inputHandler.showMessage("\nYour hand:" + hand);
-        inputHandler.showMessage("Top card: " + state.getTopCard() + " | Color: " + state.getCurrentColor());
-
         List<Card> playable = getPlayableCards(state);
 
         if (playable.isEmpty()) {
@@ -23,13 +22,6 @@ public class PlayerHuman extends Player {
             return null;
         }
 
-        Card chosen = inputHandler.selectCard(hand, state);
-
-        while (!state.isCardPlayable(chosen)) {
-            inputHandler.showMessage("That card is not playable - choose a different card");
-            chosen = inputHandler.selectCard(hand, state);
-        }
-
-        return chosen;
+        return inputHandler.selectCard(hand, state);
     }
 }
