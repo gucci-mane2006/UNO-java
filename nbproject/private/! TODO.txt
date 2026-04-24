@@ -4,4 +4,4 @@ Create main class (UNOJava.java).
 Implement file reading/writing.
 Run tests.
 ScoreManager class.
-GameController class. start game bit...
+GameController class.
