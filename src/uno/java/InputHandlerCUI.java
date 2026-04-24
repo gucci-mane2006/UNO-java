@@ -4,6 +4,7 @@ import java.util.*;
 
 public class InputHandlerCUI implements InputHandler {
     private final Scanner scanner;
+    private boolean unoCalled = false;
 
     public InputHandlerCUI(Scanner scanner) {
         if (scanner == null) throw new IllegalArgumentException("Scanner cannot be null");
@@ -12,24 +13,52 @@ public class InputHandlerCUI implements InputHandler {
 
     // Implementation
     @Override
+    public boolean wasUnoCalled() { return unoCalled; }
+    
+    @Override
     public Card selectCard(List<Card> hand, GameState state) {
+        unoCalled = false;
         displayHand(hand, state);
+        showMessage("Enter card number to play, or 0 to draw.");
+        showMessage("(Tip: include 'uno' in your input to call UNO - e.g. '3 uno')");
 
         while (true) {
-            showMessage("Enter card number to play, or 0 to draw: ");
-            int input = readInt();
+            System.out.print("> ");
+            String line = scanner.nextLine().trim();
+
+            // Detect UNO call anywhere in the raw input
+            if (line.toLowerCase().contains("uno")) {
+                unoCalled = true;
+            }
+
+            // Strip non-digits so "3 uno", "uno3", "UNO 3" all parse to 3
+            String digitsOnly = line.replaceAll("[^0-9]", "");
+
+            if (digitsOnly.isEmpty()) {
+                showMessage("Invalid input - enter a number, or 0 to draw.");
+                continue;
+            }
+
+            int input;
+            try {
+                input = Integer.parseInt(digitsOnly);
+            } catch (NumberFormatException e) {
+                showMessage("Invalid input - enter a number, or 0 to draw.");
+                continue;
+            }
 
             if (input == 0) return null;
 
             if (input < 1 || input > hand.size()) {
-                showMessage("Invalid selection. Please enter a number between 0 and " + hand.size() + ".");
+                showMessage("Invalid selection. Enter a number between 0 and " + hand.size() + ".");
                 continue;
             }
 
             Card chosen = hand.get(input - 1);
 
             if (!state.isCardPlayable(chosen)) {
-                showMessage("That card cannot be played. It must match the current " + "color (" + state.getCurrentColor() + ") or type.");
+                showMessage("That card cannot be played. It must match the current "
+                        + "color (" + state.getCurrentColor() + ") or type.");
                 continue;
             }
 

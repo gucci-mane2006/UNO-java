@@ -3,8 +3,8 @@ package uno.java;
 import java.util.*;
 
 public class Deck {
-    private Deque<Card> drawPile;
-    private Deque<Card> discardPile;
+    private Deque<Card> drawPile    = new ArrayDeque<>();
+    private Deque<Card> discardPile = new ArrayDeque<>();
 
     private static final int DECK_SIZE = 108;
 

@@ -6,7 +6,7 @@ public class PlayerAI extends Player {
     public PlayerAI(String id, String name, PlayerStrategy strategy) {
         super(id, name);
         if (strategy == null) throw new IllegalArgumentException("PlayerStrategy cannot be null");
-        this.strategy = null;
+        this.strategy = strategy;
     }
 
     @Override

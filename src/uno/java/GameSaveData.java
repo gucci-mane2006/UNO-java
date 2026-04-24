@@ -3,17 +3,18 @@ package uno.java;
 import java.util.List;
 
 public class GameSaveData {
-    public String saveId;
-    public long savedAt;    // epoch ms - used to sort/display saves
+    private String saveId;
+    private long savedAt;    // epoch ms - used to sort/display saves
     
     // GameState fields
-    int currentPlayerIndex;
-    boolean clockwise;
-    int roundNumber;
-    String phase;
-    CardDTO topCard;
-    String currentColor;
-    List<PlayerSaveData> players;
+    private int currentPlayerIndex;
+    private int targetScore;
+    private boolean clockwise;
+    private int roundNumber;
+    private String phase;
+    private CardDTO topCard;
+    private String currentColor;
+    private List<PlayerSaveData> players;
     
     // Gson no-arg constructor
     public GameSaveData() {}
@@ -23,6 +24,7 @@ public class GameSaveData {
             String saveId,
             long savedAt,
             int currentPlayerIndex,
+            int targetScore,
             boolean clockwise,
             int roundNumber,
             String phase,
@@ -33,6 +35,7 @@ public class GameSaveData {
         this.saveId               = saveId;
         this.savedAt              = savedAt;
         this.currentPlayerIndex   = currentPlayerIndex;
+        this.targetScore          = targetScore;
         this.clockwise            = clockwise;
         this.roundNumber          = roundNumber;
         this.phase                = phase;
@@ -45,6 +48,7 @@ public class GameSaveData {
     public String           getSaveId()             { return saveId; }
     public long             getSavedAt()            { return savedAt; }
     public int              getCurrentPlayerIndex() { return currentPlayerIndex; }
+    public int              getTargetScore()        { return targetScore; }
     public boolean          isClockwise()           { return clockwise; }
     public int              getRoundNumber()        { return roundNumber; }
     public CardDTO          getTopCard()            { return topCard; }

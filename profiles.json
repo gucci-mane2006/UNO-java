@@ -1,0 +1,12 @@
+{
+  "human-1": {
+    "id": "human-1",
+    "name": "Vaughn",
+    "totalScore": 108
+  },
+  "ai-1": {
+    "id": "ai-1",
+    "name": "AI-1",
+    "totalScore": 0
+  }
+}

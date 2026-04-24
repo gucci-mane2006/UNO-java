@@ -51,6 +51,7 @@ public class GameSaveManager {
                 saveId,
                 System.currentTimeMillis(),
                 state.getCurrentPlayerIndex(),
+                state.getTargetScore(),
                 state.isClockwise(),
                 state.getRoundNumber(),
                 state.getPhase().name(),
@@ -173,9 +174,9 @@ public class GameSaveManager {
             throw new GameSaveException("Save file has no players: " + path, null);
         if (data.getTopCard() == null)
             throw new GameSaveException("Save file missing topCard: " + path, null);
-        if (data.currentColor == null)
+        if (data.getCurrentColor() == null)
             throw new GameSaveException("Save file missing currentColor: " + path, null);
-        if (data.phase == null)
+        if (data.getPhase() == null)
             throw new GameSaveException("Save file missing phase: " + path, null);
  
         // Verify enum fields deserialize cleanly — catches typos in hand-edited files
@@ -183,14 +184,14 @@ public class GameSaveManager {
             data.getPhase();
         }
         catch (IllegalArgumentException e) {
-            throw new GameSaveException("Save file has unrecognised phase '" + data.phase + "': " + path, e);
+            throw new GameSaveException("Save file has unrecognised phase '" + data.getPhase() + "': " + path, e);
         }
  
         try {
             data.getCurrentColor();
         }
         catch (IllegalArgumentException | IllegalStateException e) {
-            throw new GameSaveException("Save file has invalid currentColor '" + data.currentColor + "': " + path, e);
+            throw new GameSaveException("Save file has invalid currentColor '" + data.getCurrentColor() + "': " + path, e);
         }
  
         for (PlayerSaveData player : data.getPlayers()) {
