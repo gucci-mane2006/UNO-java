@@ -48,7 +48,7 @@ public class Main {
         List<Player> players = promptPlayers();
  
         System.out.println("\nStarting game with " + players.size() + " players. Target score: " + targetScore + " points.");
-        System.out.println("─".repeat(50));
+        System.out.println("=".repeat(50));
  
         GameController controller =
                 new GameController(players, targetScore, SAVES_DIR, PROFILES_FILE);
