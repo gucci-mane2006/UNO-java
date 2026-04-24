@@ -1,20 +1,27 @@
 package uno.java;
 
 import java.util.*;
+import java.nio.file.Path;
 
 public class GameController {
     private final GameState state;
     private final Deck deck;
     private final ScoreManager scoreManager;
+    private final GameSaveManager saveManager;
+    private final ProfileRepository profileRepository;
     private boolean unoCalledThisTurn;
-
-    public GameController(List<Player> players, int targetScore) {
+    
+    // Constructor
+    public GameController(List<Player> players, int targetScore, Path saveDirectory, Path profilesFile) {
         if (players == null || players.size() < 2) throw new IllegalArgumentException("Game requires at least 2 players");
         
         this.state              = new GameState(players, targetScore);
         this.deck               = new Deck();
         this.scoreManager       = new ScoreManager();
+        this.saveManager        = new GameSaveManager(saveDirectory);
+        this.profileRepository  = new ProfileRepository(profilesFile);
         this.unoCalledThisTurn  = false;
+        
         dealInitialHands();
     }
 
