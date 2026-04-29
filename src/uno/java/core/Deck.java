@@ -1,4 +1,4 @@
-package uno.java;
+package uno.java.core;
 
 import java.util.*;
 
@@ -10,6 +10,7 @@ public class Deck {
 
     public Deck() {
         initialiseDeck();
+        assert drawPile.size() == DECK_SIZE : "Deck init with " + drawPile.size() + "cards, expected " + DECK_SIZE;
         shuffle();
     }
 

@@ -1,6 +1,9 @@
-package uno.java;
+package uno.java.input;
 
 import java.util.*;
+
+import uno.java.controller.GameState;
+import uno.java.core.*;
 
 public class InputHandlerCUI implements InputHandler {
     private final Scanner scanner;
@@ -13,10 +16,7 @@ public class InputHandlerCUI implements InputHandler {
 
     // Implementation
     @Override
-    public boolean wasUnoCalled() { return unoCalled; }
-    
-    @Override
-    public Card selectCard(List<Card> hand, GameState state) {
+    public CardSelection selectCard(List<Card> hand, GameState state) {
         unoCalled = false;
         displayHand(hand, state);
         showMessage("Enter card number to play, or 0 to draw.");
@@ -42,12 +42,13 @@ public class InputHandlerCUI implements InputHandler {
             int input;
             try {
                 input = Integer.parseInt(digitsOnly);
-            } catch (NumberFormatException e) {
+            } 
+            catch (NumberFormatException e) {
                 showMessage("Invalid input - enter a number, or 0 to draw.");
                 continue;
             }
 
-            if (input == 0) return null;
+            if (input == 0) return new CardSelection(null, unoCalled);
 
             if (input < 1 || input > hand.size()) {
                 showMessage("Invalid selection. Enter a number between 0 and " + hand.size() + ".");
@@ -62,7 +63,7 @@ public class InputHandlerCUI implements InputHandler {
                 continue;
             }
 
-            return chosen;
+            return new CardSelection(chosen, unoCalled);
         }
     }
 

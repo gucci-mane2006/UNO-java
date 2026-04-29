@@ -1,6 +1,7 @@
-package uno.java;
+package uno.java.player;
 
 import java.util.*;
+import uno.java.core.*;
 
 public class PlayerStrategyRandom implements PlayerStrategy {
     private final Random random;

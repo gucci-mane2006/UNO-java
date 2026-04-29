@@ -1,4 +1,6 @@
-package uno.java;
+package uno.java.player;
+
+import uno.java.core.*;
 
 public class PlayerAI extends Player {
     private PlayerStrategy strategy;

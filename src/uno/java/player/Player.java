@@ -1,6 +1,9 @@
-package uno.java;
+package uno.java.player;
 
 import java.util.*;
+
+import uno.java.controller.GameState;
+import uno.java.core.*;
 
 public abstract class Player {
     protected String id;
@@ -20,6 +23,8 @@ public abstract class Player {
 
     public abstract Card takeTurn(GameState state);
 
+    public boolean didCallUno() { return false; }
+
     // Hand management
     public void addCard(Card card) {
         if (card == null) throw new IllegalArgumentException("Cannot add a null card to hand");
@@ -35,9 +40,9 @@ public abstract class Player {
     // Score management
     public int getScore() { return score; }
 
-    public void addScore(int points) {
-        if (points < 0) throw new IllegalArgumentException("Cannot add negative points");
-        this.score += points;
+    public void addScore(int score) {
+        if (score < 0) throw new IllegalArgumentException("Cannot add negative score");
+        this.score += score;
     }
 
     // Id
@@ -50,6 +55,6 @@ public abstract class Player {
 
     @Override
     public String toString() {
-        return name + " (score: " + score + " , cards: " + hand.size() + ")";
+        return name + " (wins: " + score + " , cards: " + hand.size() + ")";
     }
 }

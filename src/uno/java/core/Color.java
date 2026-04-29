@@ -1,6 +1,6 @@
-package uno.java;
+package uno.java.core;
 
-enum Color {
+public enum Color {
     RED, 
     YELLOW, 
     GREEN, 
