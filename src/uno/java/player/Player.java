@@ -36,6 +36,10 @@ public abstract class Player {
     public int getHandSize()                            { return hand.size(); }
     public boolean hasPlayableCard(GameState state)     { return hand.stream().anyMatch(state::isCardPlayable); }
     public List<Card> getPlayableCards(GameState state) { return hand.stream().filter(state::isCardPlayable).toList(); }
+    
+    public void clearHand() {
+        hand.clear();
+    }
 
     // Score management
     public int getScore() { return score; }

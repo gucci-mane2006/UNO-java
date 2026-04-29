@@ -82,6 +82,14 @@ public class Deck {
         if (card == null) throw new IllegalArgumentException("Discard was called for a null card");
         discardPile.push(card);
     }
+    
+    public void insertIntoDrawPile(Card card) {
+        if (card == null) throw new IllegalArgumentException("card cannot be null");
+        List<Card> list = new ArrayList<>(drawPile);
+        list.add(new Random().nextInt(list.size() + 1), card);
+        drawPile.clear();
+        drawPile.addAll(list);
+    }
 
     public Card peekTopDiscard() {
         if (discardPile.isEmpty()) throw new IllegalStateException("Discard pile is empty");

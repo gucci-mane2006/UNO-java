@@ -1,5 +1,6 @@
 package uno.java.player;
 
+import uno.java.controller.GameState;
 import uno.java.core.*;
 
 public class PlayerAI extends Player {
@@ -16,7 +17,7 @@ public class PlayerAI extends Player {
         if (!hasPlayableCard(state)) {
             return null;
         }
-        return strategy.chooseCard(hand, state);
+        return strategy.chooseCard(getHand(), state);
     }
 
     public void setStrategy(PlayerStrategy strategy) {

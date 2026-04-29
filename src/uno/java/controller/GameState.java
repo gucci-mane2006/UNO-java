@@ -51,33 +51,42 @@ public class GameState {
 
     public boolean isCardPlayable(Card card) {
         if (card == null) return false;
+        if (topCard == null) return false;
+        
+        // Wild cards
         if (card.getType() == Type.WILD || card.getType() == Type.DRAW_FOUR) return true;
-
-        return card.getColor() == currentColor
-        || card.getType() == topCard.getType()
-        || (card.getType() == Type.NORMAL && card.getNumber() == topCard.getNumber());
+        
+        // Matching active color
+        if (card.getColor() == currentColor) return true;
+        
+        // Two NORMAL cards: match by number only
+        if (card.getType() == Type.NORMAL) {
+            return topCard.getType() == Type.NORMAL
+                    && card.getNumber().equals(topCard.getNumber());
+        }
+        
+        // Action cards match by type
+        return card.getType() == topCard.getType();
     }
 
     /*
         PRIVATE SETTERS
     */
 
-    private void setCurrentPlayerIndex(int index) {
+    void setCurrentPlayerIndex(int index) {
         if (index < 0 || index >= players.size()) throw new IndexOutOfBoundsException("Player index out of range: " + index);
         this.currentPlayerIndex = index;
     }
 
-    private void setClockwise(boolean clockwise) { this.clockwise = clockwise; }
+    void setClockwise(boolean clockwise) { this.clockwise = clockwise; }
 
-    private void setTopCard(Card card) {
+    void setTopCard(Card card) {
         if (card == null) throw new IllegalArgumentException("Top card cannot be null");
         this.topCard = card;
     }
 
-    private void setCurrentColor(Color color) {
+    void setCurrentColor(Color color) {
         if (color == null || color == Color.WILD) throw new IllegalArgumentException("Current color cannot be null or wild");
         this.currentColor = color;
     }
-
-    private void incrementRound() { this.roundNumber++; }
 }

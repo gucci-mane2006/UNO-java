@@ -18,7 +18,6 @@ public class Main {
     // GAME CONSTANTS
     private static final int MIN_PLAYERS = 2;
     private static final int MAX_PLAYERS = 8;
-    private static final int DEFAULT_TARGET_SCORE = 500;
         
     // SHARED IO
     private static final Scanner scanner = new Scanner(System.in);
@@ -54,11 +53,10 @@ public class Main {
 
         List<Player> players = promptPlayers();
  
-        System.out.println("\nStarting game with " + players.size() + " players. Target score: " + targetScore + " points.");
+        System.out.println("\nStarting game with " + players.size() + " players.");
         System.out.println("=".repeat(50));
  
-        GameController controller =
-                new GameController(players);
+        GameController controller = new GameController(players);
  
         controller.startGame();
  
@@ -127,9 +125,9 @@ public class Main {
 
     // POST-GAME SUMMARY
     private static void printPostGameSummary(GameState state) {
-        System.out.println("\n" + "═".repeat(50));
-        System.out.println("  GAME OVER");
-        System.out.println("═".repeat(50));
+        System.out.println("\n" + "=".repeat(50));
+        System.out.println("GAME OVER");
+        System.out.println("=".repeat(50));
     }
 
 

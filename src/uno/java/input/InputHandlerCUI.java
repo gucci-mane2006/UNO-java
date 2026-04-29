@@ -18,6 +18,10 @@ public class InputHandlerCUI implements InputHandler {
     @Override
     public CardSelection selectCard(List<Card> hand, GameState state) {
         unoCalled = false;
+
+        boolean hasPlayable = hand.stream().anyMatch(state::isCardPlayable);
+        if (!hasPlayable) showMessage("No playable cards. Press 0 to draw.");
+
         displayHand(hand, state);
         showMessage("Enter card number to play, or 0 to draw.");
         showMessage("(Tip: include 'uno' in your input to call UNO - e.g. '3 uno')");
@@ -32,17 +36,25 @@ public class InputHandlerCUI implements InputHandler {
             }
 
             // Strip non-digits so "3 uno", "uno3", "UNO 3" all parse to 3
-            String digitsOnly = line.replaceAll("[^0-9]", "");
+            String[] parts = line.split("\\s+");
+            String numberPart = "";
+            for (String part : parts) {
+                String digits = part.replaceAll("[^0-9]", "");
+                if (!digits.isEmpty()) {
+                    numberPart = digits;
+                    break;
+                }
+            }
 
-            if (digitsOnly.isEmpty()) {
+            if (numberPart.isEmpty()) {
                 showMessage("Invalid input - enter a number, or 0 to draw.");
                 continue;
             }
 
             int input;
             try {
-                input = Integer.parseInt(digitsOnly);
-            } 
+                input = Integer.parseInt(numberPart);
+            }
             catch (NumberFormatException e) {
                 showMessage("Invalid input - enter a number, or 0 to draw.");
                 continue;

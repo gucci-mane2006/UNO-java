@@ -1,7 +1,5 @@
 package uno.java.player;
 
-import java.util.*;
-
 import uno.java.controller.GameState;
 import uno.java.core.*;
 import uno.java.input.*;
@@ -23,13 +21,6 @@ public class PlayerHuman extends Player {
 
     @Override
     public Card takeTurn(GameState state) {
-        List<Card> playable = getPlayableCards(state);
-
-        if (playable.isEmpty()) {
-            inputHandler.showMessage("No playable cards - you must draw");
-            return null;
-        }
-
         CardSelection selection = inputHandler.selectCard(getHand(), state);
         lastUnoCall = selection.unoCalled();
         return selection.card();
