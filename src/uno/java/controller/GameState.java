@@ -89,4 +89,11 @@ public class GameState {
         if (color == null || color == Color.WILD) throw new IllegalArgumentException("Current color cannot be null or wild");
         this.currentColor = color;
     }
+    
+    void setRoundNumber(int n) {
+        if (n < 1) throw new IllegalArgumentException("Round number must be >= 1");
+        this.roundNumber = n;
+    }
+    
+    void incrementRound() { this.roundNumber++; }
 }

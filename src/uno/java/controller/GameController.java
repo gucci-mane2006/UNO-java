@@ -4,21 +4,69 @@ import java.util.*;
  
 import uno.java.core.*;
 import uno.java.player.*;
+import uno.java.dto.*;
+import uno.java.persistence.*;
 
 
 public class GameController {
     private static final int INITIAL_HAND_SIZE = 7;
 
-    private final List<Player> players;
-    private GameState state;
-    private Deck deck;
+    private final List<Player>      players;
+    private final GameSaveManager   saveManager;
+    private final ProfileRepository profileRepo; // may be null for AI only games
     private final RuleEngine rules   = new RuleEngine();
     private final Scanner    scanner = new Scanner(System.in);
-
-    public GameController(List<Player> players) {
+    
+    private GameState   state;
+    private Deck        deck;
+    private int         roundNumber = 0;
+    private boolean     resuming    = false; // true when loaded from save file
+    
+    public GameController(
+            List<Player>        players,
+            GameSaveManager     saveManager,
+            ProfileRepository   profileRepo) 
+    {
         if (players == null || players.size() < 2)
             throw new IllegalArgumentException("Game requires at least 2 players");
-        this.players = new ArrayList<>(players);
+        
+        this.players     = new ArrayList<>(players);
+        this.saveManager = saveManager;
+        this.profileRepo = profileRepo;
+    }
+    
+    public static GameController fromSave(
+            GameSaveDTO         save,
+            List<Player>        players,
+            GameSaveManager     saveManager,
+            ProfileRepository   profileRepo
+            )
+    {
+        GameController gc = new GameController(players, saveManager, profileRepo);
+        
+        // Rebuild each player's hand from the save
+        for (int i=0; i<players.size(); i++) {
+            PlayerSaveDTO dto = save.players.get(i);
+            for (CardDTO cardDTO : dto.hand) {
+                players.get(i).addCard(GameSaveManager.cardFromDTO(cardDTO));
+            }
+        }
+        
+        // Rebuild the deck
+        gc.deck = GameSaveManager.deckFromDTO(save);
+        
+        // Rebuild game state
+        gc.state = new GameState(players);
+        gc.state.setRoundNumber(save.roundNumber);
+        gc.state.setCurrentPlayerIndex(save.currentPlayerIndex);
+        gc.state.setClockwise(save.clockwise);
+        gc.state.setTopCard(GameSaveManager.cardFromDTO(save.topCard));
+        gc.state.setCurrentColor(Color.valueOf(save.currentColor));
+ 
+        gc.roundNumber = save.roundNumber;
+        gc.resuming    = true;
+ 
+        return gc;
     }
 
     /*
@@ -26,25 +74,34 @@ public class GameController {
     */
     public void startGame() {
         boolean playing = true;
+        
         while (playing) {
-            playRound();
- 
+            if (resuming) {
+                // Re-enter the existing round without redealing or redrawing
+                resuming = false;
+                
+                broadcast("\n" + "=".repeat(50));
+                broadcast("  Resuming Round " + roundNumber + " — top card: "
+                        + state.getTopCard() + "  color: " + state.getCurrentColor());
+                broadcast("=".repeat(50));
+                runRoundLoop();
+            }     
+            else playRound();
+            
             Optional<Player> winner = rules.getRoundWinner(state);
             winner.ifPresent(w -> {
-                w.addScore(1);         // win-count only; no card-value scoring yet
-                broadcast(w.getName() + " wins this round!"
-                        + "(Total wins: " + w.getScore() + ")");
+                w.addScore(1);
+                persistWin(w);
+               broadcast(w.getName() + " wins this round! (Total wins: " + w.getScore() + ")");
             });
- 
+            
             broadcast(buildScoreboard());
- 
+            
             if (!playAgain()) playing = false;
         }
     }
 
-    public GameState getState() {
-        return state;
-    }
+    public GameState getState() { return state; }
 
     /*
         ROUND LIFECYCLE
@@ -65,10 +122,19 @@ public class GameController {
                 + state.getTopCard() + "  color: " + state.getCurrentColor());
         broadcast("=".repeat(50));
  
-        // Main game loop
+        runRoundLoop();
+    }
+    
+    private void runRoundLoop() {
         while (!rules.isGameOver(state)) {
             playOneTurn();
+            
+            if (!rules.isGameOver(state)) {
+                saveManager.save(state, deck);
+            }
         }
+        
+        saveManager.deleteSave();
     }
 
     private void dealHands() {
@@ -259,6 +325,18 @@ public class GameController {
         // Fallback
         Color[] colors = { Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE };
         return colors[new Random().nextInt(colors.length)];
+    }
+    
+    // Persists updated win count for a human winner to the profile score
+    // AI wins are not tracked in profiles
+    private void persistWin(Player winner) {
+        if (profileRepo == null)                return;
+        if (!(winner instanceof PlayerHuman))   return;
+        
+        PlayerProfileDTO profile = profileRepo.findById(winner.getId())
+                .orElse(new PlayerProfileDTO(winner.getId(), winner.getName(), 0));
+        profile.score = winner.getScore();
+        profileRepo.saveProfile(profile);
     }
 
     private String buildScoreboard() {

@@ -2,13 +2,13 @@ package uno.java;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 import uno.java.controller.*;
 import uno.java.input.*;
 import uno.java.player.*;
+import uno.java.dto.*;
+import uno.java.persistence.*;
 
 public class Main {
     // FILESYSTEM LAYOUT
@@ -19,10 +19,15 @@ public class Main {
     private static final int MIN_PLAYERS = 2;
     private static final int MAX_PLAYERS = 8;
         
-    // SHARED IO
-    private static final Scanner scanner = new Scanner(System.in);
+    // SHARED IO AND PERSISTENCE - CREATED ONCE USED THROUGHOUT
+    private static final Scanner            scanner     = new Scanner(System.in);
+    private static final GameSaveManager    saveManager = new GameSaveManager(SAVES_DIR);
+    private static final ProfileRepository  profileRepo = new ProfileRepository(PROFILES_FILE);
     
-    // MAIN
+    /*
+        MAIN - ENTRY POINT
+    */
+    
     public static void main(String[] args) {
         printBanner();
         boolean running = true;
@@ -43,21 +48,31 @@ public class Main {
         scanner.close();
     }
 
-
-
-
-
-    // CASE 1 -> START NEW GAME
+    /*
+        CASE 1 - NEW GAME
+    */
+    
     private static void startNewGame() {
+        // Guard - if midgame save exists, ask whether to abandon it
+        if (saveManager.hasSave()) {
+            System.out.println("\nA saved game already exists.");
+            System.out.println("Starting a new game will permanently discard it.");
+            System.out.println("Abandon the saved game and start fresh? (1 = Yes, 0 = No)");
+            int choice = readInt(0, 1);
+            if (choice == 0) {
+                System.out.println("Returning to menu.");
+                return;
+            }
+            saveManager.deleteSave();
+        }
+        
         System.out.println("\n=== NEW GAME SETUP ===");
-
         List<Player> players = promptPlayers();
  
         System.out.println("\nStarting game with " + players.size() + " players.");
         System.out.println("=".repeat(50));
  
-        GameController controller = new GameController(players);
- 
+        GameController controller = new GameController(players, saveManager, profileRepo);
         controller.startGame();
  
         printPostGameSummary(controller.getState());
@@ -67,17 +82,80 @@ public class Main {
 
 
 
-    // CASE 2 -> LOAD SAVED GAME
+    /* 
+        CASE 2 -> LOAD SAVED GAME
+    */
+    
     private static void loadSavedGame() {
-        System.out.println("PERSISTENCE NOT IMPLEMENTED YET");
+        if (!saveManager.hasSave()) {
+            System.out.println("\nNo saved game found.");
+            return;
+        }
+        
+        GameSaveDTO save = saveManager.load();
+        if (save == null) {
+            System.out.println("\nSave file is corrupt or unreadable. It will be deleted.");
+            saveManager.deleteSave();
+            return;
+        }
+        
+        System.out.println("\n=== RESUMING SAVED GAME ===");
+        System.out.println("Round: " + save.roundNumber + " | " + save.players.size() + " players");
+        
+        // Reconstruct player objects, restoring win counts from profiles
+        List<Player> players = reconstructPlayersFromSave(save);
+ 
+        GameController controller =
+                GameController.fromSave(save, players, saveManager, profileRepo);
+        controller.startGame();
+ 
+        printPostGameSummary(controller.getState());
+    }
+    
+    private static List<Player> reconstructPlayersFromSave(GameSaveDTO save) {
+        List<Player> players    = new ArrayList<>();
+        int humanCount          = 0;
+        int aiCount             = 0;
+
+        for (PlayerSaveDTO dto : save.players) {
+            if ("HUMAN".equals(dto.playerType)) {
+                humanCount++;
+                int wins = profileRepo.findById(dto.id)
+                        .map(p -> p.score)
+                        .orElse(dto.score);
+                PlayerHuman p = new PlayerHuman(dto.id, dto.name,
+                        new InputHandlerCUI(scanner));
+                p.addScore(wins);
+                players.add(p);
+            } else {
+                aiCount++;
+                PlayerAI p = new PlayerAI(dto.id, dto.name, new PlayerStrategyRandom());
+                p.addScore(dto.score);
+                players.add(p);
+            }
+        }
+        
+        return players;
     }
 
 
     
 
-    // CASE 3 -> VIEW PROFILES
+    /*
+        CASE 3 -> VIEW PROFILES
+    */
+    
     private static void viewProfiles() {
-        System.out.println("PERSISTENCE NOT IMPLEMENTED YET");
+        List<PlayerProfileDTO> all = profileRepo.getAll();
+        
+        System.out.println("\n=== PLAYER PROFILES ===");
+        if (all.isEmpty()) {
+            System.out.println("  No profiles saved yet.");
+            return;
+        }
+        all.stream()
+           .sorted(Comparator.comparingInt((PlayerProfileDTO p) -> p.score).reversed())
+           .forEach(p -> System.out.printf("  %-20s  wins: %d%n", p.name, p.score));
     }
 
 
