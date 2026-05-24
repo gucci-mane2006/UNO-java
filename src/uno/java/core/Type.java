@@ -1,6 +1,6 @@
-package uno.java;
+package uno.java.core;
 
-enum Type {
+public enum Type {
     NORMAL,
     WILD, 
     SKIP, 
@@ -8,15 +8,15 @@ enum Type {
     DRAW_TWO,
     DRAW_FOUR;
 
-    boolean isWildType() {
+    public boolean isWildType() {
         return this == WILD || this == DRAW_FOUR;
     }
 
-    boolean isActionType() {
+    public boolean isActionType() {
         return this == SKIP || this == REVERSE || this == DRAW_TWO;
     }
 
-    boolean isNormalType() {
+    public boolean isNormalType() {
         return this == NORMAL;
     }
 };

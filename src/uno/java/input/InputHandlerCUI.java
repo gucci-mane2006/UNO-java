@@ -1,6 +1,9 @@
-package uno.java;
+package uno.java.input;
 
 import java.util.*;
+
+import uno.java.controller.GameState;
+import uno.java.core.*;
 
 public class InputHandlerCUI implements InputHandler {
     private final Scanner scanner;
@@ -13,11 +16,12 @@ public class InputHandlerCUI implements InputHandler {
 
     // Implementation
     @Override
-    public boolean wasUnoCalled() { return unoCalled; }
-    
-    @Override
-    public Card selectCard(List<Card> hand, GameState state) {
+    public CardSelection selectCard(List<Card> hand, GameState state) {
         unoCalled = false;
+
+        boolean hasPlayable = hand.stream().anyMatch(state::isCardPlayable);
+        if (!hasPlayable) showMessage("No playable cards. Press 0 to draw.");
+
         displayHand(hand, state);
         showMessage("Enter card number to play, or 0 to draw.");
         showMessage("(Tip: include 'uno' in your input to call UNO - e.g. '3 uno')");
@@ -32,22 +36,31 @@ public class InputHandlerCUI implements InputHandler {
             }
 
             // Strip non-digits so "3 uno", "uno3", "UNO 3" all parse to 3
-            String digitsOnly = line.replaceAll("[^0-9]", "");
+            String[] parts = line.split("\\s+");
+            String numberPart = "";
+            for (String part : parts) {
+                String digits = part.replaceAll("[^0-9]", "");
+                if (!digits.isEmpty()) {
+                    numberPart = digits;
+                    break;
+                }
+            }
 
-            if (digitsOnly.isEmpty()) {
+            if (numberPart.isEmpty()) {
                 showMessage("Invalid input - enter a number, or 0 to draw.");
                 continue;
             }
 
             int input;
             try {
-                input = Integer.parseInt(digitsOnly);
-            } catch (NumberFormatException e) {
+                input = Integer.parseInt(numberPart);
+            }
+            catch (NumberFormatException e) {
                 showMessage("Invalid input - enter a number, or 0 to draw.");
                 continue;
             }
 
-            if (input == 0) return null;
+            if (input == 0) return new CardSelection(null, unoCalled);
 
             if (input < 1 || input > hand.size()) {
                 showMessage("Invalid selection. Enter a number between 0 and " + hand.size() + ".");
@@ -62,7 +75,7 @@ public class InputHandlerCUI implements InputHandler {
                 continue;
             }
 
-            return chosen;
+            return new CardSelection(chosen, unoCalled);
         }
     }
 

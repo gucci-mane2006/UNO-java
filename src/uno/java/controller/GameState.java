@@ -1,6 +1,9 @@
-package uno.java;
+package uno.java.controller;
 
 import java.util.*;
+
+import uno.java.core.*;
+import uno.java.player.*;
 
 public class GameState {
     private final List<Player> players;
@@ -9,19 +12,14 @@ public class GameState {
     private Card topCard;
     private Color currentColor;
     private int roundNumber;
-    private final int targetScore;
-    private GamePhase phase;
 
-    public GameState(List<Player> players, int targetScore) {
+    public GameState(List<Player> players) {
         if (players == null || players.size() < 2) throw new IllegalArgumentException("Game requires at least 2 players");
-        if (targetScore <= 0) throw new IllegalArgumentException("Target score must be greater than 0");
 
         this.players = new ArrayList<>(players);
-        this.targetScore = targetScore;
         this.currentPlayerIndex = 0;
         this.clockwise = true;
         this.roundNumber = 1;
-        this.phase = GamePhase.WAITING;
         this.topCard = null;
         this.currentColor = null;
     }
@@ -37,12 +35,10 @@ public class GameState {
     public Player getCurrentPlayer()    { return players.get(currentPlayerIndex); }
     public List<Player> getPlayers()    { return Collections.unmodifiableList(players); }
     public int getCurrentPlayerIndex()  { return currentPlayerIndex; }
-    public int getTargetScore()         { return targetScore; }
     public Card getTopCard()            { return topCard; }
     public Color getCurrentColor()      { return currentColor; }
     public boolean isClockwise()        { return clockwise; }
     public int getRoundNumber()         { return roundNumber; }
-    public GamePhase getPhase()         { return phase; }
     public int getPlayerCount()         { return players.size(); }
 
     public int getNextPlayerIndex(int steps) {
@@ -55,16 +51,23 @@ public class GameState {
 
     public boolean isCardPlayable(Card card) {
         if (card == null) return false;
+        if (topCard == null) return false;
+        
+        // Wild cards
         if (card.getType() == Type.WILD || card.getType() == Type.DRAW_FOUR) return true;
-        return card.getColor() == currentColor
-        || card.getType() == topCard.getType()
-        || (card.getType() == Type.NORMAL && card.getNumber() == topCard.getNumber());
+        
+        // Matching active color
+        if (card.getColor() == currentColor) return true;
+        
+        // Two NORMAL cards: match by number only
+        if (card.getType() == Type.NORMAL) {
+            return topCard.getType() == Type.NORMAL
+                    && card.getNumber().equals(topCard.getNumber());
+        }
+        
+        // Action cards match by type
+        return card.getType() == topCard.getType();
     }
-
-    public boolean isRoundOver()                { return players.stream().anyMatch(p -> p.getHandSize() == 0); }
-    public boolean isGameOver()                 { return players.stream().anyMatch(p -> p.getScore() >= targetScore); }
-    public Optional<Player> getLeader()         { return players.stream().max(Comparator.comparingInt(Player::getScore)); }
-    public Optional<Player> getRoundWinner()    { return players.stream().filter(p -> p.getHandSize() == 0).findFirst(); }
 
     /*
         PRIVATE SETTERS
@@ -86,11 +89,11 @@ public class GameState {
         if (color == null || color == Color.WILD) throw new IllegalArgumentException("Current color cannot be null or wild");
         this.currentColor = color;
     }
-
-    void setPhase(GamePhase phase) {
-        if (phase == null) throw new IllegalArgumentException("Phase cannot be null");
-        this.phase = phase;
+    
+    void setRoundNumber(int n) {
+        if (n < 1) throw new IllegalArgumentException("Round number must be >= 1");
+        this.roundNumber = n;
     }
-
+    
     void incrementRound() { this.roundNumber++; }
 }

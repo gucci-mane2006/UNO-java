@@ -1,4 +1,4 @@
-package uno.java;
+package uno.java.core;
 
 import java.util.*;
 
@@ -10,8 +10,21 @@ public class Deck {
 
     public Deck() {
         initialiseDeck();
+        assert drawPile.size() == DECK_SIZE : "Deck init with " + drawPile.size() + "cards, expected " + DECK_SIZE;
         shuffle();
     }
+    
+    // Restoration factory - reconstructs deck from serialised pile snapshots
+    // Used by GameSaveManager
+    public static Deck fromPiles(List<Card> drawPile, List<Card> discardPile) {
+        Deck d = new Deck(true);
+        d.drawPile.addAll(drawPile);
+        d.discardPile.addAll(discardPile);
+        return d;
+    }
+    
+    // Private sentinel constructor that skips deck initialisation
+    private Deck(boolean skipInit) {}
 
     /*
         PRIVATE SETUP
@@ -81,6 +94,14 @@ public class Deck {
         if (card == null) throw new IllegalArgumentException("Discard was called for a null card");
         discardPile.push(card);
     }
+    
+    public void insertIntoDrawPile(Card card) {
+        if (card == null) throw new IllegalArgumentException("card cannot be null");
+        List<Card> list = new ArrayList<>(drawPile);
+        list.add(new Random().nextInt(list.size() + 1), card);
+        drawPile.clear();
+        drawPile.addAll(list);
+    }
 
     public Card peekTopDiscard() {
         if (discardPile.isEmpty()) throw new IllegalStateException("Discard pile is empty");
@@ -94,4 +115,8 @@ public class Deck {
     public boolean isEmpty() {
         return drawPile.isEmpty();
     }
+    
+    // Accessors used by GameSaveManager for serialisation
+    public List<Card> getDrawPileAsList()       { return new ArrayList<>(drawPile); }
+    public List<Card> getDiscardPileAsList()    { return new ArrayList<>(discardPile); }
 }

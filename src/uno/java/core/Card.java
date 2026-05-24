@@ -1,4 +1,4 @@
-package uno.java;
+package uno.java.core;
 
 public final class Card {
     private final Color color;
