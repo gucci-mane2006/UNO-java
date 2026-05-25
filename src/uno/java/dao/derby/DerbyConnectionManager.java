@@ -42,21 +42,13 @@ public class DerbyConnectionManager { // previously "DBManager"
     
     private static Connection open() {
         try {
-            // Explicit driver load is only needed for pre-JDBC-4 JVMs,
-            // but it's harmless and makes the dependency obvious.
-            Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
             Connection c = DriverManager.getConnection(URL);
             c.setAutoCommit(true);
             return c;
         } 
-        catch (ClassNotFoundException e) {
-            throw new RuntimeException(
-                    "Derby JDBC driver not found on classpath. "
-                    + "Add derby.jar (or the derby Maven coordinates) as a dependency.", e);
-        } 
         catch (SQLException e) {
             throw new RuntimeException(
-                    "Failed to open Derby connection: " + e.getMessage(), e);
+                    "Failed to open Derby connection. Ensure derby.jar is on the classpath. Error: " + e.getMessage(), e);
         }
     }
 }
