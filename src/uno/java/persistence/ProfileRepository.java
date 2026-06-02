@@ -1,96 +1,72 @@
 package uno.java.persistence;
 
-import com.google.gson.*;
-import com.google.gson.reflect.TypeToken;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+ 
+import uno.java.dao.PlayerProfileDAO;
+import uno.java.dao.json.PlayerProfileJsonDAO;
+import uno.java.dto.PlayerProfileDTO;
 
-import java.io.*;
-import java.lang.reflect.Type;
-import java.nio.file.*;
-import java.util.*;
-
-import uno.java.dto.*;
-
-public class ProfileRepository {
-    private final Path      profilesFile;
-    private final Gson      gson = new GsonBuilder().setPrettyPrinting().create();
-    private final List<PlayerProfileDTO>    profiles;
+public class ProfileRepository implements PlayerProfileDAO {
+    private final PlayerProfileDAO delegate;
     
     public ProfileRepository(Path profilesFile) {
-        this.profilesFile = profilesFile;
-        this.profiles     = load();
+        this.delegate = new PlayerProfileJsonDAO(profilesFile);
     }
     
-    /*
-        QUERIES
-    */
-    
-    // Case insensitive search
-    public Optional<PlayerProfileDTO> findByName(String name) {
-        return profiles.stream()
-                .filter(p -> p.name.equalsIgnoreCase(name))
-                .findFirst();
+    public ProfileRepository(PlayerProfileDAO delegate) {
+        if (delegate == null) throw new IllegalArgumentException("delegate cannot be null");
+        this.delegate = delegate;
     }
     
+    // implementation
+    @Override
     public Optional<PlayerProfileDTO> findById(String id) {
-        return profiles.stream()
-                .filter(p -> p.id.equals(id))
-                .findFirst();
+        return delegate.findById(id);
+    }
+ 
+    @Override
+    public Optional<PlayerProfileDTO> findByName(String name) {
+        return delegate.findByName(name);
+    }
+ 
+    @Override
+    public List<PlayerProfileDTO> findAll() {
+        return delegate.findAll();
+    }
+ 
+    @Override
+    public void save(PlayerProfileDTO profile) {
+        delegate.save(profile);
     }
     
-    public List<PlayerProfileDTO> getAll() {
-        return Collections.unmodifiableList(profiles);
-    }
-
-    /*
-        MUTATIONS
-    */
-    
-    // Inserts/replaces the profile with the same id then persists
-    public void saveProfile(PlayerProfileDTO profile) {
-        profiles.removeIf(p -> p.id.equals(profile.id));
-        profiles.add(profile);
-        persist();
-    }
-    
+    // legacy helpers
+    @Deprecated
     public void setScore(String id, int absoluteScore) {
         findById(id).ifPresent(p -> {
             p.score = absoluteScore;
-            persist();
+            save(p);
         });
     }
-    
-    /*
-        PRIVATE HELPERS
-    */
-    
-    private List<PlayerProfileDTO> load() {
-        if (!Files.exists(profilesFile)) return new ArrayList<>();
-        
-        try (Reader reader = Files.newBufferedReader(profilesFile)) {
-            Type listType = new TypeToken<List<PlayerProfileDTO>>() {}.getType();
-            List <PlayerProfileDTO> result = gson.fromJson(reader, listType);
-            return result != null ? result : new ArrayList<>();
-        }
-        catch (IOException e) {
-            System.err.println("[ProfileRepository] Could not laod profiles: " + e.getMessage());
-            return new ArrayList<>();
-        }
-        catch (JsonSyntaxException e) {
-            System.err.println("[ProfileRepository] profiles.json has an unexpected structure"
-                    + " and will be reset. (" + e.getMessage() + ")");
-            try { Files.deleteIfExists(profilesFile); } catch (IOException ignored) {}
-            return new ArrayList<>();
-        }
+ 
+    /**
+     * Alias retained for call-sites that used the old {@code saveProfile} name.
+     *
+     * @deprecated Use {@link #save(PlayerProfileDTO)} directly.
+     */
+    @Deprecated
+    public void saveProfile(PlayerProfileDTO profile) {
+        save(profile);
     }
-    
-    private void persist() {
-        try {
-            if (profilesFile.getParent() != null)
-                Files.createDirectories(profilesFile.getParent());
-            Files.writeString(profilesFile, gson.toJson(profiles));
-        }
-        catch (IOException e) {
-            System.err.println("[ProfileRepository] Could not write profiles: " + e.getMessage());
-        }
+ 
+    /**
+     * Alias for {@link #findAll()} retained for compatibility.
+     *
+     * @deprecated Use {@link #findAll()} directly.
+     */
+    @Deprecated
+    public List<PlayerProfileDTO> getAll() {
+        return findAll();
     }
 }
