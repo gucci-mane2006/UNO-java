@@ -7,53 +7,45 @@ import org.junit.Test;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import uno.java.dao.AbstractPlayerProfileDAOTest;
-import uno.java.dao.AbstractPlayerProfileDAOTest;
-import uno.java.dao.PlayerProfileDAO;
+import uno.java.dao.AbstractPlayerProfileDAOTestBase;
 import uno.java.dao.PlayerProfileDAO;
 import uno.java.dto.PlayerProfileDTO;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * Tests for {@link PlayerProfileDerbyDAO}.
  *
- * <h3>Structure</h3>
- * This class extends {@link AbstractPlayerProfileDAOTest}, which defines the
- * full interface contract. Every test in that base class runs here automatically,
- * verifying that the Derby implementation satisfies the same contract as the
- * JSON one.
+ * Extends {@link AbstractPlayerProfileDAOTestBase} so the full DAO contract runs
+ * against the Derby implementation automatically.
  *
- * The tests added in this class cover Derby-specific behaviour:
- * <ul>
- *   <li>In-memory database isolation and teardown</li>
- *   <li>Schema idempotency ({@code DerbySchemaInitializer} called twice)</li>
- *   <li>Constructor null-guard on the JDBC connection</li>
- *   <li>Correct UPSERT behaviour verified directly via JDBC</li>
- * </ul>
+ * Derby-specific tests cover: null connection rejection, schema idempotency,
+ * and raw JDBC verification that MERGE produces exactly one row per id.
  *
  * <h3>Test isolation</h3>
- * Each test gets a fresh in-memory Derby database via a unique URL
- * ({@code jdbc:derby:memory:test_profiles_N;create=true}). In-memory Derby
- * databases are fully independent: creating two databases with different names
- * in the same JVM run does not share any state. The database is dropped in
- * {@code @After} by connecting with {@code drop=true}.
+ * Each test method gets its own uniquely-named in-memory Derby database
+ * (e.g., {@code jdbc:derby:memory:test_player_profiles_1;create=true}).
+ * Derby keeps a dropped in-memory database's name reserved for the rest of
+ * the JVM run, so an {@link AtomicInteger} counter ensures every test uses
+ * a name that has never been used before. The database is dropped in
+ * {@code @After} with {@code drop=true}.
  *
- * This avoids the file-system side-effects of the production
- * {@link DerbyConnectionManager} and means tests never interfere with each
- * other, even when run in parallel.
+ * <h3>Derby availability</h3>
+ * If the Derby JAR is not on the classpath, {@code DriverManager.getConnection}
+ * throws in {@code @Before}. The test calls {@code assumeTrue(false)} at that
+ * point, which causes JUnit 4 to mark the test as <em>skipped</em> rather
+ * than <em>failed</em>, and no subsequent code in that test method runs.
  */
-public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTest {
+public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTestBase {
 
-    // Unique DB name per test class run - avoids name collision when test
-    // suites are executed repeatedly within the same JVM.
-    private static final String DB_NAME = "memory:test_player_profiles";
-    private static final String DB_URL  = "jdbc:derby:" + DB_NAME + ";create=true";
-    private static final String DROP_URL = "jdbc:derby:" + DB_NAME + ";drop=true";
+    private static final AtomicInteger DB_COUNTER = new AtomicInteger();
 
+    private String     dbUrl;
+    private String     dropUrl;
     private Connection conn;
 
     // -------------------------------------------------------------------------
@@ -61,17 +53,22 @@ public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTest {
     // -------------------------------------------------------------------------
 
     @Before
-    public void setUpDerby() throws Exception {
-        // Load embedded Derby driver explicitly.
-        Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+    @Override
+    public void setUp() {
+        String dbName = "memory:test_player_profiles_" + DB_COUNTER.incrementAndGet();
+        dbUrl   = "jdbc:derby:" + dbName + ";create=true";
+        dropUrl = "jdbc:derby:" + dbName + ";drop=true";
 
-        conn = DriverManager.getConnection(DB_URL);
-        conn.setAutoCommit(true);
+        try {
+            conn = DriverManager.getConnection(dbUrl);
+            conn.setAutoCommit(true);
+            new DerbySchemaInitialiser(conn).initSchema();
+        } catch (Exception e) {
+            // Derby JAR not on classpath or failed to initialise — skip this test.
+            assumeTrue("Derby not available, skipping: " + e.getMessage(), false);
+        }
 
-        // Create schema in the fresh in-memory DB.
-        new DerbySchemaInitialiser(conn).initSchema();
-
-        // Now let the superclass setUp() call createDAO(), which uses this conn.
+        // conn is now non-null; superclass setUp() calls createDAO().
         super.setUp();
     }
 
@@ -80,24 +77,24 @@ public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTest {
         if (conn != null) {
             try { conn.close(); } catch (SQLException ignored) {}
         }
-        // Drop the in-memory database so the next test run starts clean.
-        try {
-            DriverManager.getConnection(DROP_URL).close();
-        } catch (SQLException e) {
-            // SQLState 08006 means the drop succeeded (Derby always throws on drop).
-            if (!"08006".equals(e.getSQLState())) {
-                System.err.println("Unexpected error dropping test DB: " + e.getMessage());
+        if (dropUrl != null) {
+            try {
+                DriverManager.getConnection(dropUrl).close();
+            } catch (SQLException e) {
+                // SQLState 08006 = successful drop (Derby always throws on drop).
+                if (!"08006".equals(e.getSQLState())) {
+                    System.err.println("Unexpected error dropping test DB: " + e.getMessage());
+                }
             }
         }
     }
 
     // -------------------------------------------------------------------------
-    // AbstractPlayerProfileDAOTest hook
+    // AbstractPlayerProfileDAOTestBase hook
     // -------------------------------------------------------------------------
 
     @Override
     protected PlayerProfileDAO createDAO() {
-        // conn is assigned in setUpDerby(), which runs before super.setUp().
         return new PlayerProfileDerbyDAO(conn);
     }
 
@@ -120,12 +117,12 @@ public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTest {
 
     /**
      * Calling {@link DerbySchemaInitializer#initSchema()} twice on the same
-     * connection must not throw. The second call hits the X0Y32 ("table already
-     * exists") SQLState for every table, which must be silently ignored.
+     * connection must not throw. Every CREATE TABLE hits SQLState X0Y32 on the
+     * second call; the initialiser must suppress that state silently.
      */
     @Test
     public void schemaInitializer_calledTwice_doesNotThrow() throws Exception {
-        new DerbySchemaInitialiser(conn).initSchema(); // second call on already-initialised DB
+        new DerbySchemaInitialiser(conn).initSchema();
     }
 
     // =========================================================================
@@ -133,73 +130,60 @@ public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTest {
     // =========================================================================
 
     /**
-     * After calling save() with a new profile, exactly one row must exist in
-     * the PLAYER table for that PLAYERID — verified by querying JDBC directly
-     * rather than through the DAO, to confirm the SQL write actually happened.
+     * After save() with a new id, exactly one row must exist in the PLAYER
+     * table — verified directly via JDBC to confirm the write reached the DB.
      */
     @Test
     public void save_newProfile_exactlyOneRowExistsInPlayerTable() throws Exception {
         dao.save(new PlayerProfileDTO("human-1", "Alice", 5));
 
-        int rowCount = countPlayerRows("human-1");
-
-        assertEquals("Exactly one row expected after insert", 1, rowCount);
+        assertEquals("Exactly one row expected after insert", 1, countPlayerRows("human-1"));
     }
 
     /**
-     * After calling save() twice with the same id (upsert), exactly one row
-     * must still exist — the MERGE must update, not insert a duplicate.
+     * Saving the same id twice must leave exactly one row — the MERGE must
+     * UPDATE rather than INSERT a duplicate row.
      */
     @Test
     public void save_sameIdTwice_stillExactlyOneRowInPlayerTable() throws Exception {
         dao.save(new PlayerProfileDTO("human-1", "Alice", 3));
         dao.save(new PlayerProfileDTO("human-1", "Alice", 10));
 
-        int rowCount = countPlayerRows("human-1");
-
-        assertEquals("MERGE must not create a second row for the same id", 1, rowCount);
+        assertEquals("MERGE must not create a second row", 1, countPlayerRows("human-1"));
     }
 
     /**
-     * The score written to the database by the second save must be the updated
-     * value — confirmed via a direct JDBC query to bypass any DAO-layer caching.
+     * After an upsert the SCORE column must hold the value from the second
+     * save — confirmed via a direct JDBC query that bypasses any DAO caching.
      */
     @Test
     public void save_upsert_updatedScoreIsStoredInDatabase() throws Exception {
         dao.save(new PlayerProfileDTO("human-1", "Alice", 3));
         dao.save(new PlayerProfileDTO("human-1", "Alice", 10));
 
-        int dbScore = readScoreFromDb("human-1");
-
-        assertEquals("MERGE must update the score column", 10, dbScore);
+        assertEquals("MERGE must update the SCORE column", 10, readScoreFromDb("human-1"));
     }
 
-    // =========================================================================
-    // Derby-specific: multiple profiles stored across separate saves
-    // =========================================================================
-
     /**
-     * Each save with a distinct id must produce its own independent row.
-     * This confirms the INSERT branch of the MERGE fires correctly for new ids.
+     * Each save with a distinct id must produce its own independent row,
+     * confirming the INSERT branch of the MERGE fires correctly for new ids.
      */
     @Test
-    public void save_threeDistinctIds_threeRowsExistInDatabase() throws Exception {
+    public void save_threeDistinctIds_threeRowsInDatabase() throws Exception {
         dao.save(new PlayerProfileDTO("human-1", "Alice", 1));
         dao.save(new PlayerProfileDTO("human-2", "Bob",   2));
         dao.save(new PlayerProfileDTO("ai-1",    "CPU",   0));
 
-        List<PlayerProfileDTO> all = dao.findAll();
-
-        assertEquals(3, all.size());
+        assertEquals(3, dao.findAll().size());
     }
 
     // =========================================================================
-    // Private JDBC helpers — bypass the DAO to inspect raw DB state
+    // Private JDBC helpers
     // =========================================================================
 
     private int countPlayerRows(String playerId) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM PLAYER WHERE PLAYERID = ?";
-        try (var ps = conn.prepareStatement(sql)) {
+        try (var ps = conn.prepareStatement(
+                "SELECT COUNT(*) FROM PLAYER WHERE PLAYERID = ?")) {
             ps.setString(1, playerId);
             try (var rs = ps.executeQuery()) {
                 rs.next();
@@ -209,11 +193,11 @@ public class PlayerProfileDerbyDAOTest extends AbstractPlayerProfileDAOTest {
     }
 
     private int readScoreFromDb(String playerId) throws SQLException {
-        String sql = "SELECT SCORE FROM PLAYER WHERE PLAYERID = ?";
-        try (var ps = conn.prepareStatement(sql)) {
+        try (var ps = conn.prepareStatement(
+                "SELECT SCORE FROM PLAYER WHERE PLAYERID = ?")) {
             ps.setString(1, playerId);
             try (var rs = ps.executeQuery()) {
-                assertTrue("No row found for PLAYERID: " + playerId, rs.next());
+                assertTrue("No row found for id: " + playerId, rs.next());
                 return rs.getInt("SCORE");
             }
         }

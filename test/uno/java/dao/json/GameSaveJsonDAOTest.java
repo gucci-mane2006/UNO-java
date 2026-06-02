@@ -1,71 +1,77 @@
 package uno.java.dao.json;
 
-import org.junit.Rule;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 
-import uno.java.dao.AbstractGameSaveDAOTest;
-import uno.java.dao.AbstractGameSaveDAOTest;
+import uno.java.dao.AbstractGameSaveDAOTestBase;
 import uno.java.dao.GameSaveDAO;
-import uno.java.dao.GameSaveDAO;
-import uno.java.dto.GameSaveDTO;
 
 import static org.junit.Assert.*;
 
 /**
  * Tests for {@link GameSaveJsonDAO}.
  *
- * <h3>Structure</h3>
- * This class extends {@link AbstractGameSaveDAOTest}, which defines the full
- * interface contract. Every test in that base class runs here automatically,
- * verifying that the JSON implementation satisfies the same contract as the
- * Derby one.
+ * Extends {@link AbstractGameSaveDAOTestBase} so the full DAO contract runs
+ * against the JSON implementation automatically.
  *
- * The tests added here cover JSON-specific behaviour:
- * <ul>
- *   <li>The constructor must reject a null directory path.</li>
- *   <li>save() must create the saves directory if it does not exist.</li>
- *   <li>save() must write a non-empty {@code game.json} file to disk.</li>
- *   <li>delete() must remove the file from disk.</li>
- *   <li>A save written by one instance must be loadable by a second instance
- *       constructed from the same directory (cross-instance persistence).</li>
- *   <li>exists() must reflect file presence, not just in-memory state.</li>
- * </ul>
+ * JSON-specific tests cover: null path rejection, automatic directory
+ * creation, file lifecycle on disk, cross-instance disk persistence,
+ * and file content structure.
  *
  * <h3>Test isolation</h3>
- * JUnit's {@link TemporaryFolder} rule creates a fresh temporary directory for
- * each test and deletes it after the test completes.
+ * Each test gets a dedicated temporary directory created in {@code @Before}
+ * and deleted in {@code @After}. This avoids the ordering problem with
+ * JUnit 4's {@code @Rule TemporaryFolder}, where the folder is not yet
+ * initialised when the superclass {@code @Before} calls {@code createDAO()}.
  */
-public class GameSaveJsonDAOTest extends AbstractGameSaveDAOTest {
+public class GameSaveJsonDAOTest extends AbstractGameSaveDAOTestBase {
 
-    @Rule
-    public TemporaryFolder tempFolder = new TemporaryFolder();
+    private Path tempDir;
+
+    @Before
+    @Override
+    public void setUp() {
+        try {
+            tempDir = Files.createTempDirectory("uno_gamesave_test_");
+        } catch (IOException e) {
+            throw new RuntimeException("Could not create temp directory for test", e);
+        }
+        super.setUp();
+    }
+
+    @After
+    public void tearDown() throws IOException {
+        if (tempDir != null && Files.exists(tempDir)) {
+            try (var stream = Files.walk(tempDir)) {
+                stream.sorted(Comparator.reverseOrder())
+                      .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
-    // AbstractGameSaveDAOTest hook
+    // AbstractGameSaveDAOTestBase hook
     // -------------------------------------------------------------------------
 
     /**
-     * Returns a DAO pointed at a saves sub-directory inside the temp folder.
-     * The sub-directory does not exist yet — the DAO must create it on first write.
+     * Points the DAO at a "saves" sub-directory that does not yet exist —
+     * the DAO must create it on first write.
      */
     @Override
     protected GameSaveDAO createDAO() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
-        return new GameSaveJsonDAO(savesDir);
+        return new GameSaveJsonDAO(tempDir.resolve("saves"));
     }
 
     // =========================================================================
     // JSON-specific: constructor guard
     // =========================================================================
 
-    /**
-     * Passing a null directory path to the constructor must throw immediately.
-     */
     @Test(expected = IllegalArgumentException.class)
     public void constructor_nullSavesDir_throwsIllegalArgument() {
         new GameSaveJsonDAO(null);
@@ -76,20 +82,18 @@ public class GameSaveJsonDAOTest extends AbstractGameSaveDAOTest {
     // =========================================================================
 
     /**
-     * When the saves directory does not exist, save() must create it rather
-     * than failing with an IOException. After the call the directory must exist.
+     * When the saves directory does not yet exist, save() must create it rather
+     * than throwing an IOException.
      */
     @Test
-    public void save_savesDirDoesNotExist_createsDirAndSavesFile() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
-        assertFalse("Precondition: saves dir must not exist yet", Files.exists(savesDir));
+    public void save_savesDirDoesNotExist_createsDirAndFile() {
+        Path savesDir = tempDir.resolve("saves");
+        assertFalse("Precondition: saves dir must not exist", Files.exists(savesDir));
 
-        GameSaveDAO freshDao = new GameSaveJsonDAO(savesDir);
-        freshDao.save(minimalSave());
+        new GameSaveJsonDAO(savesDir).save(minimalSave());
 
-        assertTrue("saves directory must be created by save()", Files.isDirectory(savesDir));
-        assertTrue("game.json must exist inside the new directory",
-                Files.exists(savesDir.resolve("game.json")));
+        assertTrue(Files.isDirectory(savesDir));
+        assertTrue(Files.exists(savesDir.resolve("game.json")));
     }
 
     // =========================================================================
@@ -97,127 +101,105 @@ public class GameSaveJsonDAOTest extends AbstractGameSaveDAOTest {
     // =========================================================================
 
     /**
-     * After save(), game.json must exist on disk — the DAO must write to the
-     * filesystem, not only update in-memory state.
+     * After save(), game.json must be present on disk — confirming the DAO
+     * writes through to the filesystem.
      */
     @Test
     public void save_snapshot_createsGameJsonOnDisk() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
-        GameSaveDAO fileDao = new GameSaveJsonDAO(savesDir);
-        fileDao.save(minimalSave());
+        Path savesDir = tempDir.resolve("saves");
+        new GameSaveJsonDAO(savesDir).save(minimalSave());
 
         assertTrue(Files.exists(savesDir.resolve("game.json")));
     }
 
     /**
-     * After delete(), game.json must be removed from disk. This confirms that
-     * delete() is a real file deletion, not just clearing in-memory state.
+     * After delete(), game.json must be removed from disk.
      */
     @Test
     public void delete_afterSave_removesGameJsonFromDisk() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
+        Path savesDir = tempDir.resolve("saves");
         GameSaveDAO fileDao = new GameSaveJsonDAO(savesDir);
         fileDao.save(minimalSave());
         fileDao.delete();
 
-        assertFalse("game.json must be deleted from disk after delete()",
-                Files.exists(savesDir.resolve("game.json")));
+        assertFalse(Files.exists(savesDir.resolve("game.json")));
     }
 
     /**
-     * exists() must reflect the presence of game.json on disk, not just
-     * in-memory state. After the file is manually deleted (bypassing the DAO),
-     * exists() on the same instance must return false.
+     * exists() must reflect file presence on disk. After the file is deleted
+     * externally (bypassing the DAO), the same instance must return false.
      */
     @Test
     public void exists_fileDeletedExternally_returnsFalse() throws IOException {
-        Path savesDir  = tempFolder.getRoot().toPath().resolve("saves");
+        Path savesDir = tempDir.resolve("saves");
         GameSaveDAO fileDao = new GameSaveJsonDAO(savesDir);
         fileDao.save(minimalSave());
 
-        // Delete the file directly — simulates an external deletion or crash cleanup.
         Files.deleteIfExists(savesDir.resolve("game.json"));
 
-        assertFalse("exists() must return false when game.json is absent from disk",
-                fileDao.exists());
+        assertFalse(fileDao.exists());
     }
 
     /**
-     * The game.json file must be non-empty after save(), confirming the JSON
-     * payload was written rather than producing a zero-byte file.
+     * game.json must be non-empty after save().
      */
     @Test
     public void save_snapshot_fileContentIsNonEmpty() throws IOException {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
-        GameSaveDAO fileDao = new GameSaveJsonDAO(savesDir);
-        fileDao.save(minimalSave());
+        Path savesDir = tempDir.resolve("saves");
+        new GameSaveJsonDAO(savesDir).save(minimalSave());
 
-        long fileSize = Files.size(savesDir.resolve("game.json"));
-
-        assertTrue("game.json must be non-empty after save", fileSize > 0);
+        assertTrue(Files.size(savesDir.resolve("game.json")) > 0);
     }
 
     // =========================================================================
-    // JSON-specific: persistence across instances
+    // JSON-specific: cross-instance persistence
     // =========================================================================
 
     /**
-     * A snapshot saved by one DAO instance must be loadable by a second instance
-     * constructed from the same saves directory. This confirms the data reaches
-     * disk rather than remaining only in the first instance's memory.
+     * A snapshot saved by one instance must be loadable by a second instance
+     * pointing at the same directory — confirms data reaches disk.
      */
     @Test
     public void save_thenConstructNewInstance_snapshotIsLoadedFromDisk() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
+        Path savesDir = tempDir.resolve("saves");
 
-        GameSaveDAO firstInstance = new GameSaveJsonDAO(savesDir);
-        firstInstance.save(minimalSave()); // round 1
+        new GameSaveJsonDAO(savesDir).save(minimalSave()); // round 1
 
-        GameSaveDAO secondInstance = new GameSaveJsonDAO(savesDir);
-
-        assertTrue("Second instance must find the save written by the first",
-                secondInstance.exists());
-        assertEquals(1, secondInstance.load().orElseThrow().roundNumber);
+        GameSaveDAO second = new GameSaveJsonDAO(savesDir);
+        assertTrue(second.exists());
+        assertEquals(1, second.load().orElseThrow().roundNumber);
     }
 
     /**
-     * An overwrite performed by one instance must be visible to a second
-     * instance. The second instance must load the latest snapshot, not the
-     * original one.
+     * An overwrite by one instance must be visible to a second instance —
+     * the second instance must see the latest snapshot, not the first.
      */
     @Test
     public void save_overwriteThenNewInstance_latestSnapshotIsOnDisk() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
+        Path savesDir = tempDir.resolve("saves");
 
-        GameSaveDAO firstInstance = new GameSaveJsonDAO(savesDir);
-        firstInstance.save(minimalSave());    // round 1
-        firstInstance.save(alternateSave()); // round 3
+        GameSaveDAO first = new GameSaveJsonDAO(savesDir);
+        first.save(minimalSave());    // round 1
+        first.save(alternateSave()); // round 3
 
-        GameSaveDAO secondInstance = new GameSaveJsonDAO(savesDir);
-        int loaded = secondInstance.load().orElseThrow().roundNumber;
-
-        assertEquals("Second instance must read the most recent overwrite", 3, loaded);
+        int loaded = new GameSaveJsonDAO(savesDir).load().orElseThrow().roundNumber;
+        assertEquals(3, loaded);
     }
 
     /**
-     * After delete() is called by one instance, a second instance constructed
-     * from the same directory must see no save (exists returns false, load
-     * returns empty).
+     * After one instance deletes the save, a second instance must see no save.
      */
     @Test
     public void delete_byOneInstance_secondInstanceSeesNoSave() {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
+        Path savesDir = tempDir.resolve("saves");
 
-        GameSaveDAO firstInstance = new GameSaveJsonDAO(savesDir);
-        firstInstance.save(minimalSave());
-        firstInstance.delete();
+        GameSaveDAO first = new GameSaveJsonDAO(savesDir);
+        first.save(minimalSave());
+        first.delete();
 
-        GameSaveDAO secondInstance = new GameSaveJsonDAO(savesDir);
-
-        assertFalse("After delete, a new instance must report exists=false",
-                secondInstance.exists());
-        assertFalse("After delete, a new instance must return empty from load()",
-                secondInstance.load().isPresent());
+        GameSaveDAO second = new GameSaveJsonDAO(savesDir);
+        assertFalse(second.exists());
+        assertFalse(second.load().isPresent());
     }
 
     // =========================================================================
@@ -226,18 +208,15 @@ public class GameSaveJsonDAOTest extends AbstractGameSaveDAOTest {
 
     /**
      * The file written by save() must begin with '{', confirming it is a JSON
-     * object (the serialised GameSaveDTO), not a JSON array or some other format.
-     * A regression here would break load() for all subsequent runs.
+     * object (the serialised GameSaveDTO). A regression here would break all
+     * subsequent load() calls.
      */
     @Test
     public void save_snapshot_fileContentIsJsonObject() throws IOException {
-        Path savesDir = tempFolder.getRoot().toPath().resolve("saves");
-        GameSaveDAO fileDao = new GameSaveJsonDAO(savesDir);
-        fileDao.save(minimalSave());
+        Path savesDir = tempDir.resolve("saves");
+        new GameSaveJsonDAO(savesDir).save(minimalSave());
 
         String content = Files.readString(savesDir.resolve("game.json")).strip();
-
-        assertTrue("game.json must be a JSON object starting with '{'",
-                content.startsWith("{"));
+        assertTrue("game.json must start with '{'", content.startsWith("{"));
     }
 }

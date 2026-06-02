@@ -73,12 +73,23 @@ public class PlayerProfileDerbyDAO implements PlayerProfileDAO {
             throw new IllegalArgumentException("profile cannot be null");
         if (profile.id == null || profile.id.isBlank())
             throw new IllegalArgumentException("profile.id cannot be null or blank");
- 
-        try (PreparedStatement ps = conn.prepareStatement(DerbySchema.UPSERT_PLAYER)) {
-            ps.setString(1, profile.id);
-            ps.setString(2, profile.name != null ? profile.name : "");
-            ps.setInt(3, profile.score);
-            ps.executeUpdate();
+
+        try {
+            // Try UPDATE first; if no row was affected, INSERT
+            try (PreparedStatement ps = conn.prepareStatement(DerbySchema.UPDATE_PLAYER)) {
+                ps.setString(1, profile.name != null ? profile.name : "");
+                ps.setInt(2, profile.score);
+                ps.setString(3, profile.id);
+                if (ps.executeUpdate() == 0) {
+                    // No existing row — insert
+                    try (PreparedStatement ins = conn.prepareStatement(DerbySchema.INSERT_PLAYER)) {
+                        ins.setString(1, profile.id);
+                        ins.setString(2, profile.name != null ? profile.name : "");
+                        ins.setInt(3, profile.score);
+                        ins.executeUpdate();
+                    }
+                }
+            }
         } catch (SQLException e) {
             throw new RuntimeException("[PlayerProfileDerbyDAO] save failed: " + e.getMessage(), e);
         }

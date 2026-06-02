@@ -25,7 +25,7 @@ import static org.junit.Assert.*;
  *
  * Test-naming convention: {@code methodUnderTest_scenario_expectedOutcome}.
  */
-public abstract class AbstractGameSaveDAOTest {
+public abstract class AbstractGameSaveDAOTestBase {
 
     protected GameSaveDAO dao;
 

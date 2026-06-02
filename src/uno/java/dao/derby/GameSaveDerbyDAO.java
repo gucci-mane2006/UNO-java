@@ -27,14 +27,21 @@ public class GameSaveDerbyDAO implements GameSaveDAO {
     @Override
     public void save(GameSaveDTO save) {
         if (save == null) throw new IllegalArgumentException("save cannot be null");
-        try (PreparedStatement ps = conn.prepareStatement(DerbySchema.UPSERT_GAME_SAVE)) {
-            ps.setString(1, gson.toJson(save));
-            ps.executeUpdate();
+        String json = gson.toJson(save);
+        try {
+            try (PreparedStatement ps = conn.prepareStatement(DerbySchema.UPDATE_GAME_SAVE)) {
+                ps.setString(1, json);
+                if (ps.executeUpdate() == 0) {
+                    try (PreparedStatement ins = conn.prepareStatement(DerbySchema.INSERT_GAME_SAVE)) {
+                        ins.setString(1, json);
+                        ins.executeUpdate();
+                    }
+                }
+            }
         } catch (SQLException e) {
             throw new RuntimeException("[GameSaveDerbyDAO] save failed: " + e.getMessage(), e);
         }
     }
- 
     @Override
     public Optional<GameSaveDTO> load() {
         String sql = "SELECT SAVE_JSON FROM GAME_SAVE WHERE SAVE_ID = ?";

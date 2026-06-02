@@ -23,7 +23,7 @@ import static org.junit.Assert.*;
  *
  * Test-naming convention: {@code methodUnderTest_scenario_expectedOutcome}.
  */
-public abstract class AbstractPlayerProfileDAOTest {
+public abstract class AbstractPlayerProfileDAOTestBase {
 
     // The DAO under test - rebuilt fresh before every test by setUp().
     protected PlayerProfileDAO dao;

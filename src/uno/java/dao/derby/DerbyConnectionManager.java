@@ -15,7 +15,7 @@ public class DerbyConnectionManager { // previously "DBManager"
         this.conn = open();
     }
     
-    public Connection getConncetion() {
+    public Connection getConnection() {
         return conn;
     }
     
