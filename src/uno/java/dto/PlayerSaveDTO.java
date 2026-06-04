@@ -7,7 +7,7 @@ public class PlayerSaveDTO {
     public String           id;
     public String           name;
     public int              score;
-    public String           playerType; // "HUMAN" or "AI"
+    public PlayerType       playerType; // "HUMAN" or "AI"
     public List<CardDTO>    hand;
     
     public PlayerSaveDTO() {}

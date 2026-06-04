@@ -113,7 +113,7 @@ public class GameSaveManager implements GameSaveDAO {
         dto.id            = player.getId();
         dto.name          = player.getName();
         dto.score         = player.getScore();
-        dto.playerType    = (player instanceof PlayerHuman) ? "HUMAN" : "AI";
+        dto.playerType    = (player instanceof PlayerHuman) ? PlayerType.HUMAN : PlayerType.AI;
         dto.hand          = player.getHand().stream()
                                   .map(this::cardToDTO)
                                   .collect(Collectors.toList());

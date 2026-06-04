@@ -2,72 +2,31 @@ package uno.java;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.SQLException;
 import java.util.*;
 
 import uno.java.controller.*;
-import uno.java.dao.GameSaveDAO;
-import uno.java.dao.PlayerProfileDAO;
-import uno.java.dao.derby.*;
-import uno.java.dto.*;
 import uno.java.input.*;
-import uno.java.persistence.*;
 import uno.java.player.*;
+import uno.java.dto.*;
+import uno.java.persistence.*;
 
-/**
- * Application entry point.
- *
- * <h3>Storage backend selection</h3>
- * The game uses either the JSON flat-file backend (default) or the embedded
- * Derby backend.  Switch by uncommenting the relevant block below.
- *
- * Both backends satisfy the same interfaces ({@link PlayerProfileDAO} and
- * {@link GameSaveDAO}), so {@code GameController} is unaffected by the choice.
- */
 public class Main {
-
-    // -------------------------------------------------------------------------
-    // Filesystem layout (JSON backend)
-    // -------------------------------------------------------------------------
+    // FILESYSTEM LAYOUT
     private static final Path SAVES_DIR     = Paths.get("saves");
     private static final Path PROFILES_FILE = Paths.get("profiles.json");
 
-    // Game constants
+    // GAME CONSTANTS
     private static final int MIN_PLAYERS = 2;
     private static final int MAX_PLAYERS = 8;
 
-    // Shared IO
-    private static final Scanner scanner = new Scanner(System.in);
-
-    // -------------------------------------------------------------------------
-    // Persistence — change this block to swap backends
-    // -------------------------------------------------------------------------
-
-    // --- JSON backend (default) ---
+    // SHARED IO AND PERSISTENCE - CREATED ONCE USED THROUGHOUT
+    private static final Scanner            scanner     = new Scanner(System.in);
     private static final GameSaveManager    saveManager = new GameSaveManager(SAVES_DIR);
     private static final ProfileRepository  profileRepo = new ProfileRepository(PROFILES_FILE);
 
-    /* --- Derby backend (uncomment to use) ---
-     *
-     * private static DerbyConnectionManager derbyConnMgr;
-     * private static GameSaveManager        saveManager;
-     * private static ProfileRepository      profileRepo;
-     *
-     * static {
-     *     try {
-     *         derbyConnMgr = new DerbyConnectionManager();
-     *         new DerbySchemaInitializer(derbyConnMgr.getConnection()).initSchema();
-     *         saveManager = new GameSaveManager(new GameSaveDerbyDAO(derbyConnMgr.getConnection()));
-     *         profileRepo = new ProfileRepository(new PlayerProfileDerbyDAO(derbyConnMgr.getConnection()));
-     *     } catch (SQLException e) {
-     *         throw new RuntimeException("Failed to initialise Derby schema: " + e.getMessage(), e);
-     *     }
-     * }
-     */
-
-    // -------------------------------------------------------------------------
-    // Entry point
-    // -------------------------------------------------------------------------
+    /*
+        MAIN - ENTRY POINT
+    */
 
     public static void main(String[] args) {
         printBanner();
@@ -87,16 +46,14 @@ public class Main {
 
         System.out.println("\nThanks for playing UNO! Goodbye.");
         scanner.close();
-
-        // Uncomment when using Derby backend:
-        // if (derbyConnMgr != null) derbyConnMgr.close();
     }
 
-    // -------------------------------------------------------------------------
-    // Case 1 — New game
-    // -------------------------------------------------------------------------
+    /*
+        CASE 1 -> NEW GAME
+    */
 
     private static void startNewGame() {
+        // Guard - if midgame save exists, ask whether to abandon it
         if (saveManager.hasSave()) {
             System.out.println("\nA saved game already exists.");
             System.out.println("Starting a new game will permanently discard it.");
@@ -121,9 +78,9 @@ public class Main {
         printPostGameSummary(controller.getState());
     }
 
-    // -------------------------------------------------------------------------
-    // Case 2 — Load saved game
-    // -------------------------------------------------------------------------
+    /*
+        CASE 2 -> LOAD SAVED GAME
+    */
 
     private static void loadSavedGame() {
         if (!saveManager.hasSave()) {
@@ -131,18 +88,29 @@ public class Main {
             return;
         }
 
-        // Use the Optional-returning load() now that GameSaveManager implements GameSaveDAO.
-        GameSaveDTO save = saveManager.load().orElse(null);
-        if (save == null) {
+        Optional<GameSaveDTO> saveOpt = saveManager.load();
+        if (saveOpt.isEmpty()) {
             System.out.println("\nSave file is corrupt or unreadable. It will be deleted.");
             saveManager.deleteSave();
             return;
         }
+        GameSaveDTO save = saveOpt.get();
+        
+        List<String> saveErrors = save.validate(); // validation call
+        if (!saveErrors.isEmpty()) {
+            System.out.println("\nSave file failed validation and will be deleted.");
+            System.out.println("Problem(s) found:");
+            saveErrors.forEach(e -> System.out.println("  - " + e));
+            saveManager.deleteSave();
+            return;
+        }
+
 
         System.out.println("\n=== RESUMING SAVED GAME ===");
         System.out.println("Round: " + save.roundNumber + " | " + save.players.size() + " players");
 
         List<Player> players = reconstructPlayersFromSave(save);
+
         GameController controller =
                 GameController.fromSave(save, players, saveManager, profileRepo);
         controller.startGame();
@@ -150,14 +118,25 @@ public class Main {
         printPostGameSummary(controller.getState());
     }
 
+    /**
+     * Rebuilds Player objects from a save snapshot.
+     *
+     * Human player IDs stored in the save are stable UUIDs (set when the game
+     * was first created via promptPlayers). We look up the current score from
+     * the profile rather than the save because the profile is the source of
+     * truth for cumulative wins - the save only stores the score at the moment
+     * the turn was written.
+     *
+     * If no profile is found for an ID (e.g. a save created before this fix
+     * was applied, which used positional IDs), we fall back to the score stored
+     * in the save file so the game can still be resumed.
+     */
     private static List<Player> reconstructPlayersFromSave(GameSaveDTO save) {
         List<Player> players = new ArrayList<>();
-        int humanCount = 0;
-        int aiCount    = 0;
+        int aiCount = 0;
 
         for (PlayerSaveDTO dto : save.players) {
-            if ("HUMAN".equals(dto.playerType)) {
-                humanCount++;
+            if (dto.playerType == PlayerType.HUMAN) {
                 int wins = profileRepo.findById(dto.id)
                         .map(p -> p.score)
                         .orElse(dto.score);
@@ -166,20 +145,21 @@ public class Main {
                 players.add(p);
             } else {
                 aiCount++;
-                PlayerAI p = new PlayerAI(dto.id, dto.name, new PlayerStrategyRandom());
+                PlayerAI p = new PlayerAI(dto.id, "ai-" + aiCount, new PlayerStrategyRandom());
                 p.addScore(dto.score);
                 players.add(p);
             }
         }
+
         return players;
     }
 
-    // -------------------------------------------------------------------------
-    // Case 3 — View profiles
-    // -------------------------------------------------------------------------
+    /*
+        CASE 3 -> VIEW PROFILES
+    */
 
     private static void viewProfiles() {
-        List<PlayerProfileDTO> all = profileRepo.findAll();
+        List<PlayerProfileDTO> all = profileRepo.getAll();
 
         System.out.println("\n=== PLAYER PROFILES ===");
         if (all.isEmpty()) {
@@ -192,16 +172,26 @@ public class Main {
     }
 
     // -------------------------------------------------------------------------
-    // Player setup helpers
+    // PLAYER SETUP
     // -------------------------------------------------------------------------
 
+    /**
+     * Prompts the user to configure each player slot, then returns the
+     * fully initialised player list.
+     *
+     * Human players are resolved against the profile store: returning players
+     * get their historical win count restored; first-time players get a new
+     * UUID-based profile created immediately.
+     *
+     * AI players retain positional IDs ("ai-1", "ai-2", …) because they
+     * have no persistent profile.
+     */
     private static List<Player> promptPlayers() {
         System.out.println("\nHow many players? (" + MIN_PLAYERS + "-" + MAX_PLAYERS + ")");
         int count = readInt(MIN_PLAYERS, MAX_PLAYERS);
 
         List<Player> players = new ArrayList<>();
-        int humanCount = 0;
-        int aiCount    = 0;
+        int aiCount = 0;
 
         for (int i = 1; i <= count; i++) {
             System.out.println("\n--- Player " + i + " ---");
@@ -211,25 +201,101 @@ public class Main {
             int type = readInt(1, 2);
 
             if (type == 1) {
-                humanCount++;
-                String name = promptNonBlank("Enter name for Player " + i + ": ");
-                String id   = "human-" + humanCount;
-                players.add(new PlayerHuman(id, name, new InputHandlerCUI(scanner)));
+                PlayerHuman human = promptAndResolveHumanPlayer(i, players);
+                players.add(human);
             } else {
                 aiCount++;
                 String defaultName = "AI-" + aiCount;
-                System.out.println("Enter name for AI player [" + defaultName + "]: ");
+                System.out.print("Enter name for AI player [" + defaultName + "]: ");
                 String input = scanner.nextLine().trim();
                 String name  = input.isBlank() ? defaultName : input;
                 String id    = "ai-" + aiCount;
                 players.add(new PlayerAI(id, name, new PlayerStrategyRandom()));
             }
         }
+
         return players;
     }
 
+    /**
+     * Handles the full human-player setup flow for one player slot.
+     *
+     * The method loops until the user provides a name that is not already
+     * taken by another player in this game session. Once a valid name is
+     * entered:
+     *
+     *   Returning player (name found in profiles):
+     *     - The existing UUID is reused as the player ID.
+     *     - The historical win count is seeded into the Player's in-memory
+     *       score so the scoreboard and persistWin() reflect the cumulative total.
+     *     - A welcome-back message is shown.
+     *
+     *   New player (name not found):
+     *     - A fresh UUID is generated and a profile is immediately persisted
+     *       so the ID is stable from the first game onwards.
+     *     - The player starts with a score of zero.
+     *
+     * Using the profile's stored name (rather than the user's raw input) as
+     * the canonical display name preserves the original capitalisation across
+     * sessions (e.g. "Alice" stays "Alice" even if the user types "alice").
+     *
+     * @param slot     the 1-based player number, used only for the prompt label
+     * @param existing players already added to this game, used for duplicate detection
+     * @return a fully initialised PlayerHuman with a stable UUID and seeded score
+     */
+    private static PlayerHuman promptAndResolveHumanPlayer(int slot, List<Player> existing) {
+        while (true) {
+            String input = promptNonBlank("Enter name for Player " + slot + ": ");
+
+            // Reject names already claimed in this session (case-insensitive)
+            boolean duplicate = existing.stream()
+                    .anyMatch(p -> p.getName().equalsIgnoreCase(input));
+            if (duplicate) {
+                System.out.println(
+                        "  \"" + input + "\" is already taken in this game. Choose a different name.");
+                continue;
+            }
+
+            // Look up existing profile or create a new one
+            PlayerProfileDTO profile = profileRepo.findByName(input)
+                    .orElseGet(() -> registerNewProfile(input));
+
+            // Use the profile's canonical name to preserve original capitalisation
+            PlayerHuman player = new PlayerHuman(
+                    profile.id, profile.name, new InputHandlerCUI(scanner));
+
+            // Seed historical wins so scoreboard and persistWin() accumulate correctly:
+            //   player.score = historical wins
+            //   after winning a round: player.score = historical + session wins
+            //   persistWin() stores player.getScore() → correct cumulative total
+            if (profile.score > 0) {
+                player.addScore(profile.score);
+                System.out.println(
+                        "  Welcome back, " + profile.name + "!"
+                        + " You have " + profile.score + " historical win(s).");
+            }
+
+            return player;
+        }
+    }
+
+    /**
+     * Creates a brand-new profile with a randomly generated UUID and persists
+     * it immediately. Persisting upfront ensures the ID is stable even if the
+     * player exits before winning a round.
+     *
+     * @param name the display name entered by the user
+     * @return the newly created and persisted profile
+     */
+    private static PlayerProfileDTO registerNewProfile(String name) {
+        PlayerProfileDTO profile = new PlayerProfileDTO(
+                UUID.randomUUID().toString(), name, 0);
+        profileRepo.saveProfile(profile);
+        return profile;
+    }
+
     // -------------------------------------------------------------------------
-    // Post-game summary
+    // POST-GAME SUMMARY
     // -------------------------------------------------------------------------
 
     private static void printPostGameSummary(GameState state) {
@@ -239,7 +305,7 @@ public class Main {
     }
 
     // -------------------------------------------------------------------------
-    // Menus and banners
+    // MENUS AND BANNERS
     // -------------------------------------------------------------------------
 
     private static void printBanner() {
@@ -263,9 +329,12 @@ public class Main {
     }
 
     // -------------------------------------------------------------------------
-    // IO utilities
+    // IO UTILITIES
     // -------------------------------------------------------------------------
 
+    /**
+     * Reads an integer in [min, max] inclusive, reprompting on bad input.
+     */
     private static int readInt(int min, int max) {
         while (true) {
             System.out.print("> ");
@@ -280,6 +349,9 @@ public class Main {
         }
     }
 
+    /**
+     * Prompts until a non-blank string is entered.
+     */
     private static String promptNonBlank(String prompt) {
         while (true) {
             System.out.print(prompt);

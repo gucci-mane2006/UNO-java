@@ -15,7 +15,6 @@ public class GameController {
     private final GameSaveManager   saveManager;
     private final ProfileRepository profileRepo; // may be null for AI only games
     private final RuleEngine rules   = new RuleEngine();
-    private final Scanner    scanner = new Scanner(System.in);
     
     private GameState   state;
     private Deck        deck;
@@ -127,15 +126,28 @@ public class GameController {
     
     private void runRoundLoop() {
         while (!rules.isGameOver(state)) {
-            playOneTurn();
-            
+            try {
+                playOneTurn();
+            } catch (DeckExhaustedException e) {
+                // All 108 cards have migrated into players' hands; neither pile
+                // can supply a card. End the round with no winner so the game
+                // remains playable (startGame() will show the scoreboard and
+                // offer another round). The in-progress save is deleted because
+                // the deck state makes it unresumable.
+                broadcast("\n  The deck has run out of cards and cannot be reshuffled.");
+                broadcast("  This round ends with no winner.");
+                saveManager.deleteSave();
+                return;
+            }
+
             if (!rules.isGameOver(state)) {
                 saveManager.save(state, deck);
             }
         }
-        
+
         saveManager.deleteSave();
     }
+
 
     private void dealHands() {
         for (int i = 0; i < INITIAL_HAND_SIZE; i++) {
@@ -349,18 +361,9 @@ public class GameController {
     }
  
     private boolean playAgain() {
-        broadcast("\nPlay another round? (1 = Yes, 0 = No)");
-        // Find the first human player's input handler to display prompts;
-        // read from our own scanner so we never close System.in
         for (Player p : players) {
             if (p instanceof PlayerHuman human) {
-                while (true) {
-                    System.out.print("> ");
-                    String line = scanner.nextLine().trim();
-                    if (line.equals("1")) return true;
-                    if (line.equals("0")) return false;
-                    human.getInputHandler().showMessage("Please enter 1 or 0.");
-                }
+                return human.getInputHandler().promptPlayAgain();
             }
         }
         // All-AI game: play only one round
@@ -379,5 +382,4 @@ public class GameController {
         }
         if (!anyHuman) System.out.println(message);
     }
-
 }
