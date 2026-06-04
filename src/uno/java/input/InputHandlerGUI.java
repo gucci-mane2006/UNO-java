@@ -15,15 +15,14 @@ import uno.java.core.Color;
  *
  * Threading contract
  * ------------------
- * The game loop runs on a background thread (see MainGUI). Every method that
- * needs player input:
- *   1. Calls Platform.runLater() to push UI work onto the JavaFX Application Thread.
- *   2. Blocks the game thread on a CompletableFuture until the player acts.
- *   3. Returns the resolved value to the game thread.
+ * The game loop runs on a background thread (see MainGUI). Every method that needs player input:
+ *   1. Calls Platform.runLater() to push UI work onto the JavaFX Application Thread
+ *   2. Blocks the game thread on a CompletableFuture until the player acts
+ *   3. Returns the resolved value to the game thread
  *
- * showMessage() never blocks — it just dispatches the string to the FX thread.
+ * showMessage() never blocks - it just dispatches the string to the FX thread
  *
- * The four callbacks are injected by GameTableView after the scene is built.
+ * The four callbacks are injected by GameTableView after the scene is built
  */
 public class InputHandlerGUI implements InputHandler {
 
