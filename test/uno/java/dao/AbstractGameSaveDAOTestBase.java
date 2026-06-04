@@ -10,6 +10,7 @@ import java.util.Optional;
 import uno.java.dto.CardDTO;
 import uno.java.dto.GameSaveDTO;
 import uno.java.dto.PlayerSaveDTO;
+import uno.java.dto.PlayerType;
 
 import static org.junit.Assert.*;
 
@@ -82,7 +83,7 @@ public abstract class AbstractGameSaveDAOTestBase {
         p.id             = id;
         p.name           = name;
         p.score          = 0;
-        p.playerType     = "HUMAN";
+        p.playerType     = PlayerType.HUMAN;
         p.hand           = new ArrayList<>();
         return p;
     }

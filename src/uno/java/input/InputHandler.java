@@ -9,4 +9,5 @@ public interface InputHandler {
     CardSelection selectCard(List<Card> hand, GameState state);
     Color selectColor();
     void showMessage(String message);
+    boolean promptPlayAgain();
 }

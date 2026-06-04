@@ -1,6 +1,7 @@
 package uno.java.core;
 
 import java.util.*;
+import uno.java.controller.DeckExhaustedException;
 
 public class Deck {
     private Deque<Card> drawPile    = new ArrayDeque<>();
@@ -86,9 +87,13 @@ public class Deck {
 
     public Card draw() {
         if (drawPile.isEmpty()) reshuffleDiscardIntoDraw();
-        if (drawPile.isEmpty()) throw new IllegalStateException("Draw pile exhausted - not enough cards to draw");
+        if (drawPile.isEmpty()) throw new DeckExhaustedException(
+                "Both piles are exhausted — the deck cannot supply any more cards. "
+                + "Draw pile: 0, Discard pile: " + discardPile.size()
+                + " (minimum 2 required to reshuffle, keeping the top card in place).");
         return drawPile.pop();
     }
+
 
     public void discard(Card card) {
         if (card == null) throw new IllegalArgumentException("Discard was called for a null card");

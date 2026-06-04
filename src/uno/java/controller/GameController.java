@@ -6,6 +6,7 @@ import uno.java.core.*;
 import uno.java.player.*;
 import uno.java.dto.*;
 import uno.java.persistence.*;
+import uno.java.input.InputHandler;
 
 
 public class GameController {
@@ -15,17 +16,30 @@ public class GameController {
     private final GameSaveManager   saveManager;
     private final ProfileRepository profileRepo; // may be null for AI only games
     private final RuleEngine rules   = new RuleEngine();
-    private final Scanner    scanner = new Scanner(System.in);
+    private final InputHandler observer; // receives broadcast() - null in CUI games
     
     private GameState   state;
     private Deck        deck;
     private int         roundNumber = 0;
     private boolean     resuming    = false; // true when loaded from save file
     
+    // Backward compatible constructor
     public GameController(
             List<Player>        players,
             GameSaveManager     saveManager,
-            ProfileRepository   profileRepo) 
+            ProfileRepository   profileRepo
+            )
+    {
+        this(players, saveManager, profileRepo, null);
+    }
+    
+    
+    // Primary constructor
+    public GameController(
+            List<Player>        players,
+            GameSaveManager     saveManager,
+            ProfileRepository   profileRepo,
+            InputHandler        observer) 
     {
         if (players == null || players.size() < 2)
             throw new IllegalArgumentException("Game requires at least 2 players");
@@ -33,6 +47,7 @@ public class GameController {
         this.players     = new ArrayList<>(players);
         this.saveManager = saveManager;
         this.profileRepo = profileRepo;
+        this.observer    = observer;
     }
     
     public static GameController fromSave(
@@ -42,7 +57,18 @@ public class GameController {
             ProfileRepository   profileRepo
             )
     {
-        GameController gc = new GameController(players, saveManager, profileRepo);
+        return fromSave(save, players, saveManager, profileRepo, null);
+    }
+    
+    public static GameController fromSave(
+            GameSaveDTO         save,
+            List<Player>        players,
+            GameSaveManager     saveManager,
+            ProfileRepository   profileRepo,
+            InputHandler        observer
+            )
+    {
+        GameController gc = new GameController(players, saveManager, profileRepo, observer);
         
         // Rebuild each player's hand from the save
         for (int i=0; i<players.size(); i++) {
@@ -127,15 +153,28 @@ public class GameController {
     
     private void runRoundLoop() {
         while (!rules.isGameOver(state)) {
-            playOneTurn();
-            
+            try {
+                playOneTurn();
+            } catch (DeckExhaustedException e) {
+                // All 108 cards have migrated into players' hands; neither pile
+                // can supply a card. End the round with no winner so the game
+                // remains playable (startGame() will show the scoreboard and
+                // offer another round). The in-progress save is deleted because
+                // the deck state makes it unresumable.
+                broadcast("\n  The deck has run out of cards and cannot be reshuffled.");
+                broadcast("  This round ends with no winner.");
+                saveManager.deleteSave();
+                return;
+            }
+
             if (!rules.isGameOver(state)) {
                 saveManager.save(state, deck);
             }
         }
-        
+
         saveManager.deleteSave();
     }
+
 
     private void dealHands() {
         for (int i = 0; i < INITIAL_HAND_SIZE; i++) {
@@ -349,18 +388,9 @@ public class GameController {
     }
  
     private boolean playAgain() {
-        broadcast("\nPlay another round? (1 = Yes, 0 = No)");
-        // Find the first human player's input handler to display prompts;
-        // read from our own scanner so we never close System.in
         for (Player p : players) {
             if (p instanceof PlayerHuman human) {
-                while (true) {
-                    System.out.print("> ");
-                    String line = scanner.nextLine().trim();
-                    if (line.equals("1")) return true;
-                    if (line.equals("0")) return false;
-                    human.getInputHandler().showMessage("Please enter 1 or 0.");
-                }
+                return human.getInputHandler().promptPlayAgain();
             }
         }
         // All-AI game: play only one round
@@ -369,7 +399,8 @@ public class GameController {
 
 
     private void broadcast(String message) {
-        // Send to every human player's InputHandler; also print directly for AI-only games
+        if (observer != null) observer.showMessage(message);
+        
         boolean anyHuman = false;
         for (Player p : players) {
             if (p instanceof PlayerHuman human) {
@@ -377,7 +408,6 @@ public class GameController {
                 anyHuman = true;
             }
         }
-        if (!anyHuman) System.out.println(message);
+        if (observer == null && !anyHuman) System.out.println(message);
     }
-
 }

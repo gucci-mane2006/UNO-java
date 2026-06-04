@@ -100,6 +100,18 @@ public class InputHandlerCUI implements InputHandler {
     public void showMessage(String message) {
         System.out.println(message);
     }
+    
+    @Override
+    public boolean promptPlayAgain() {
+        showMessage("\nPlay another round? (1 = Yes, 0 = No)");
+        while (true) {
+            System.out.print("> ");
+            String line = scanner.nextLine().trim();
+            if (line.equals("1")) return true;
+            if (line.equals("0")) return false;
+            showMessage("Please enter 1 or 0.");
+        }
+    }
 
     // Private helpers
     private void displayHand(List<Card> hand, GameState state) {
