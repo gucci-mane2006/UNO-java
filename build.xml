@@ -73,10 +73,10 @@
 
     <target name="-post-jar">
         <echo file="${dist.dir}/run.bat">@echo off
-java --module-path lib --add-modules javafx.controls,javafx.fxml,javafx.graphics -jar UNO-java.jar
+java --module-path lib --add-modules javafx.controls,javafx.fxml,javafx.graphics --enable-native-access=javafx.graphics -Djava.library.path=bin -jar UNO-java.jar
 pause</echo>
         <echo file="${dist.dir}/run.sh">#!/bin/bash
-java --module-path lib --add-modules javafx.controls,javafx.fxml,javafx.graphics -jar UNO-java.jar</echo>
+java --module-path lib --add-modules javafx.controls,javafx.fxml,javafx.graphics --enable-native-access=javafx.graphics -Djava.library.path=bin -jar UNO-java.jar</echo>
         <chmod file="${dist.dir}/run.sh" perm="755"/>
         <echo>Launcher scripts generated in ${dist.dir}</echo>
     </target>
