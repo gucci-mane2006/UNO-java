@@ -70,4 +70,17 @@
     nbproject/build-impl.xml file. 
 
     -->
+
+    <target name="-post-jar">
+        <mkdir dir="${dist.dir}/bin"/>
+        <copy todir="${dist.dir}/bin">
+            <fileset dir="${basedir}/bin"/>
+        </copy>
+        <echo file="${dist.dir}/run.bat">@echo off
+java --module-path lib --add-modules javafx.controls,javafx.fxml,javafx.graphics --enable-native-access=javafx.graphics -Djava.library.path=bin -jar UNO-java.jar</echo>
+        <echo file="${dist.dir}/run.sh">#!/bin/bash
+java --module-path lib --add-modules javafx.controls,javafx.fxml,javafx.graphics --enable-native-access=javafx.graphics -Djava.library.path=bin -jar UNO-java.jar</echo>
+        <chmod file="${dist.dir}/run.sh" perm="755"/>
+        <echo>Launcher scripts generated in ${dist.dir}</echo>
+    </target>
 </project>
