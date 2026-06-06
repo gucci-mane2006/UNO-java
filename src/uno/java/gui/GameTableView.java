@@ -10,6 +10,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -29,8 +30,18 @@ public class GameTableView extends StackPane {
     private final TextArea logArea      = new TextArea();
     private final VBox     inputArea    = new VBox(8);
 
-    // Modal overlay - built once, shown/hidden per wild-card play
-    private final StackPane modalOverlay = new StackPane();
+    // Shared overlay layer
+    private final StackPane modalOverlay  = new StackPane();
+    private final StackPane modalContent  = new StackPane(); // children replaced per modal
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Log capture - used by play-again modal to extract round context
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Rolling buffer of the last N log lines; enough to always contain the
+    // winner announcement + full scoreboard from GameController.broadcast()
+    private static final int LOG_BUFFER  = 24;
+    private final List<String> recentLogLines = new ArrayList<>(LOG_BUFFER);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -43,7 +54,7 @@ public class GameTableView extends StackPane {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Layer 0 - table
+    // Layer 0 - game table
     // ─────────────────────────────────────────────────────────────────────────
 
     private void buildTableLayer() {
@@ -86,102 +97,26 @@ public class GameTableView extends StackPane {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Layer 1 - color-picker modal
+    // Layer 1 - shared modal overlay
     // ─────────────────────────────────────────────────────────────────────────
 
     private void buildModalLayer() {
-        // Scrim - covers the whole table and intercepts mouse events
+        // Scrim stretches to fill the window
         Rectangle scrim = new Rectangle();
         scrim.setFill(javafx.scene.paint.Color.rgb(0, 0, 0, 0.65));
-        // Bind scrim size to the StackPane so it always fills the window
         scrim.widthProperty().bind(widthProperty());
         scrim.heightProperty().bind(heightProperty());
 
-        // Dialog card
-        VBox dialog = buildColorDialog(); // populated lazily when shown
+        // modalContent is a plain StackPane; its one child is replaced when
+        // the modal type changes (color vs play-again).
+        modalContent.setMaxWidth(Region.USE_PREF_SIZE);
+        modalContent.setMaxHeight(Region.USE_PREF_SIZE);
 
-        modalOverlay.getChildren().addAll(scrim, dialog);
+        modalOverlay.getChildren().addAll(scrim, modalContent);
         modalOverlay.setVisible(false);
-        modalOverlay.setMouseTransparent(true); // passthrough when hidden
+        modalOverlay.setMouseTransparent(true);
 
-        getChildren().add(modalOverlay); // Layer 1 - on top
-    }
-
-    /**
-     * Builds the color-picker dialog box (static structure; the future is
-     * wired each time showColorModal is called).
-     *
-     * Returns a VBox tagged with id "colorDialog" so showColorModal() can
-     * find it and attach fresh button handlers.
-     */
-    private VBox buildColorDialog() {
-        VBox dialog = new VBox(0);
-        dialog.setId("colorDialog");
-        dialog.setMaxWidth(340);
-        dialog.setMaxHeight(Region.USE_PREF_SIZE);
-        dialog.setAlignment(Pos.TOP_CENTER);
-        dialog.setStyle(
-            "-fx-background-color: #1e1e1e; "
-            + "-fx-background-radius: 10; "
-            + "-fx-border-color: #444444; "
-            + "-fx-border-radius: 10; "
-            + "-fx-border-width: 1; "
-            + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.8), 24, 0, 0, 6);"
-        );
-
-        // Header
-        Label header = new Label("Choose a color");
-        header.setFont(Font.font("Monospaced", FontWeight.BOLD, 17));
-        header.setStyle("-fx-text-fill: #e0e0e0;");
-        header.setPadding(new Insets(22, 24, 16, 24));
-        header.setMaxWidth(Double.MAX_VALUE);
-        header.setStyle(
-            "-fx-text-fill: #e0e0e0; "
-            + "-fx-font-family: Monospaced; "
-            + "-fx-font-weight: bold; "
-            + "-fx-font-size: 17px; "
-            + "-fx-padding: 22 24 16 24;"
-        );
-
-        Label sub = new Label("Your Wild card needs a color to continue.");
-        sub.setStyle(
-            "-fx-text-fill: #888888; "
-            + "-fx-font-family: Monospaced; "
-            + "-fx-font-size: 11px; "
-            + "-fx-padding: 0 24 18 24;"
-        );
-        sub.setWrapText(true);
-        sub.setMaxWidth(Double.MAX_VALUE);
-
-        // Divider
-        Separator sep = new Separator();
-        sep.setStyle("-fx-background-color: #333;");
-
-        // color swatch grid - 2×2
-        GridPane grid = new GridPane();
-        grid.setPadding(new Insets(20, 20, 24, 20));
-        grid.setHgap(12);
-        grid.setVgap(12);
-        grid.setId("colorGrid");
-
-        uno.java.core.Color[] colors = {
-            uno.java.core.Color.RED,
-            uno.java.core.Color.YELLOW,
-            uno.java.core.Color.GREEN,
-            uno.java.core.Color.BLUE
-        };
-        String[] bgOn  = { "#c0392b", "#d4ac0d", "#1e8449", "#1a5276" };
-        String[] bgOff = { "#7b241c", "#9a7d0a", "#145a32", "#154360" };
-        String[] labels = { "RED", "YELLOW", "GREEN", "BLUE" };
-
-        for (int i = 0; i < 4; i++) {
-            Button swatch = buildSwatch(labels[i], bgOn[i], bgOff[i]);
-            swatch.setId("swatch_" + colors[i].name()); // used to attach handlers
-            grid.add(swatch, i % 2, i / 2);
-        }
-
-        dialog.getChildren().addAll(header, sub, sep, grid);
-        return dialog;
+        getChildren().add(modalOverlay); // Layer 1
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -192,7 +127,7 @@ public class GameTableView extends StackPane {
         handler.setOnMessage(this::appendLog);
         handler.setOnCardSelected(this::showHandPanel);
         handler.setOnColorSelected(this::showColorModal);
-        handler.setOnPlayAgain(this::showPlayAgainPanel);
+        handler.setOnPlayAgain(this::showPlayAgainModal);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -202,13 +137,19 @@ public class GameTableView extends StackPane {
     private void appendLog(String message) {
         logArea.appendText(message + "\n");
         logArea.setScrollTop(Double.MAX_VALUE);
+
+        // Keep rolling buffer for play-again context extraction
+        if (recentLogLines.size() >= LOG_BUFFER) recentLogLines.remove(0);
+        recentLogLines.add(message);
+
+        // Mirror turn headers into status bar
         if (message.startsWith("---") && message.endsWith("---")) {
             statusLabel.setText(message.replace("-", "").trim());
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Hand panel (unchanged from Step 1)
+    // Hand panel
     // ─────────────────────────────────────────────────────────────────────────
 
     private void showHandPanel(InputHandlerGUI.CardSelectRequest req) {
@@ -223,9 +164,9 @@ public class GameTableView extends StackPane {
         inputArea.getChildren().add(unoBox);
 
         for (int i = 0; i < hand.size(); i++) {
-            Card card    = hand.get(i);
+            Card card      = hand.get(i);
             boolean canPlay = state.isCardPlayable(card);
-            Button btn   = cardButton(card, i + 1, canPlay);
+            Button btn     = cardButton(card, i + 1, canPlay);
             if (canPlay) {
                 final Card chosen = card;
                 btn.setOnAction(e -> {
@@ -249,17 +190,21 @@ public class GameTableView extends StackPane {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // color-picker modal
+    // color picker modal
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Shows the modal overlay and wires each swatch button to complete the
-     * future. Called on the FX thread by InputHandlerGUI.
-     */
     private void showColorModal(CompletableFuture<uno.java.core.Color> future) {
-        // Find the dialog VBox and its grid inside the overlay
-        VBox dialog = (VBox) modalOverlay.lookup("#colorDialog");
-        GridPane grid = (GridPane) dialog.lookup("#colorGrid");
+        modalContent.getChildren().setAll(buildColorDialog(future));
+        statusLabel.setText("Choose a color for your Wild card");
+        fadeInModal();
+    }
+
+    private VBox buildColorDialog(CompletableFuture<uno.java.core.Color> future) {
+        VBox dialog = dialogShell();
+
+        Label header = dialogHeader("Choose a color");
+        Label sub    = dialogSub("Your Wild card needs a color to continue.");
+        dialog.getChildren().addAll(header, sub, new Separator());
 
         uno.java.core.Color[] colors = {
             uno.java.core.Color.RED,
@@ -267,65 +212,147 @@ public class GameTableView extends StackPane {
             uno.java.core.Color.GREEN,
             uno.java.core.Color.BLUE
         };
+        String[] bgOn  = { "#c0392b", "#d4ac0d", "#1e8449", "#1a5276" };
+        String[] bgOff = { "#7b241c", "#9a7d0a", "#145a32", "#154360" };
 
-        // Attach a fresh handler to each swatch (clears previous round's lambda)
-        for (uno.java.core.Color color : colors) {
-            Button swatch = (Button) grid.lookup("#swatch_" + color.name());
-            if (swatch == null) continue;
-            swatch.setOnAction(e -> dismissColorModal(color, future));
+        GridPane grid = new GridPane();
+        grid.setPadding(new Insets(20, 20, 24, 20));
+        grid.setHgap(12);
+        grid.setVgap(12);
+
+        for (int i = 0; i < colors.length; i++) {
+            final uno.java.core.Color chosen = colors[i];
+            Button swatch = buildSwatch(chosen.name(), bgOn[i], bgOff[i]);
+            swatch.setOnAction(e -> dismissModal(() -> {
+                statusLabel.setText("color chosen: " + chosen);
+                future.complete(chosen);
+            }));
+            grid.add(swatch, i % 2, i / 2);
         }
 
-        // Update status bar to prompt the player
-        statusLabel.setText("Choose a color for your Wild card");
+        dialog.getChildren().add(grid);
+        return dialog;
+    }
 
-        // Fade the overlay in
+    // ─────────────────────────────────────────────────────────────────────────
+    // Play-again modal
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private void showPlayAgainModal(CompletableFuture<Boolean> future) {
+        modalContent.getChildren().setAll(buildPlayAgainDialog(future));
+        statusLabel.setText("Round over - play again?");
+        fadeInModal();
+    }
+
+    private VBox buildPlayAgainDialog(CompletableFuture<Boolean> future) {
+        VBox dialog = dialogShell();
+        dialog.setMaxWidth(400);
+
+        // Winner Banner
+        String winnerLine = extractWinnerLine();
+        Label  winnerLabel = new Label(winnerLine.isBlank() ? "Round over!" : winnerLine);
+        winnerLabel.setFont(Font.font("Monospaced", FontWeight.BOLD, 18));
+        winnerLabel.setStyle(
+            "-fx-text-fill: #f0c040; "         // gold
+            + "-fx-font-family: Monospaced; "
+            + "-fx-font-weight: bold; "
+            + "-fx-font-size: 18px; "
+            + "-fx-padding: 22 24 4 24;"
+        );
+        winnerLabel.setWrapText(true);
+        winnerLabel.setMaxWidth(Double.MAX_VALUE);
+
+        // Scoreboard
+        VBox scoreBox = new VBox(4);
+        scoreBox.setPadding(new Insets(8, 24, 16, 24));
+        for (String line : extractScoreboardLines()) {
+            Label l = new Label(line);
+            l.setStyle(
+                "-fx-text-fill: #cccccc; "
+                + "-fx-font-family: Monospaced; "
+                + "-fx-font-size: 12px;"
+            );
+            scoreBox.getChildren().add(l);
+        }
+
+        dialog.getChildren().addAll(winnerLabel, scoreBox, new Separator());
+
+        // Prompt + buttons
+        Label prompt = dialogSub("Play another round?");
+        prompt.setPadding(new Insets(14, 24, 10, 24));
+
+        Button yes = buildActionButton("▶  Play again",    "#1e6b3a", "#28a745");
+        Button no  = buildActionButton("✕  Return to menu","#6b1e1e", "#dc3545");
+
+        yes.setOnAction(e -> dismissModal(() -> future.complete(true)));
+        no.setOnAction (e -> dismissModal(() -> future.complete(false)));
+
+        HBox buttons = new HBox(12, yes, no);
+        buttons.setPadding(new Insets(0, 20, 22, 20));
+        buttons.setAlignment(Pos.CENTER);
+
+        dialog.getChildren().addAll(prompt, buttons);
+        return dialog;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Modal show / dismiss helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private void fadeInModal() {
         modalOverlay.setVisible(true);
         modalOverlay.setMouseTransparent(false);
         modalOverlay.setOpacity(0);
-        FadeTransition fadeIn = new FadeTransition(Duration.millis(180), modalOverlay);
-        fadeIn.setFromValue(0);
-        fadeIn.setToValue(1);
-        fadeIn.play();
+        FadeTransition ft = new FadeTransition(Duration.millis(180), modalOverlay);
+        ft.setToValue(1);
+        ft.play();
     }
 
-    /**
-     * Fades the modal out, then completes the future.
-     * The game thread is waiting on future.join() and will proceed
-     * as soon as complete() is called.
-     */
-    private void dismissColorModal(uno.java.core.Color chosen,
-                                   CompletableFuture<uno.java.core.Color> future) {
-        FadeTransition fadeOut = new FadeTransition(Duration.millis(140), modalOverlay);
-        fadeOut.setFromValue(1);
-        fadeOut.setToValue(0);
-        fadeOut.setOnFinished(e -> {
+    private void dismissModal(Runnable onDone) {
+        FadeTransition ft = new FadeTransition(Duration.millis(140), modalOverlay);
+        ft.setFromValue(1);
+        ft.setToValue(0);
+        ft.setOnFinished(e -> {
             modalOverlay.setVisible(false);
             modalOverlay.setMouseTransparent(true);
-            statusLabel.setText("color chosen: " + chosen);
-            future.complete(chosen); // unblocks game thread
+            onDone.run(); // completes future → unblocks game thread
         });
-        fadeOut.play();
+        ft.play();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Play-again panel (unchanged from Step 1)
+    // Log-scraping helpers for play-again dialog context
     // ─────────────────────────────────────────────────────────────────────────
 
-    private void showPlayAgainPanel(CompletableFuture<Boolean> future) {
-        clearDynamicContent();
-        inputArea.getChildren().add(smallLabel("Play another round?"));
+    private String extractWinnerLine() {
+        for (int i = recentLogLines.size() - 1; i >= 0; i--) {
+            String line = recentLogLines.get(i);
+            if (line.contains("wins this round")) return line.trim();
+        }
+        return "";
+    }
 
-        Button yes = new Button("Yes - play again");
-        Button no  = new Button("No  - return to menu");
-        styleButton(yes, "#226622", "#ffffff");
-        styleButton(no,  "#662222", "#ffffff");
-        yes.setMaxWidth(Double.MAX_VALUE);
-        no.setMaxWidth(Double.MAX_VALUE);
+    private List<String> extractScoreboardLines() {
+        List<String> result = new ArrayList<>();
+        boolean inBoard = false;
 
-        yes.setOnAction(e -> { clearDynamicContent(); future.complete(true);  });
-        no.setOnAction (e -> { clearDynamicContent(); future.complete(false); });
-
-        inputArea.getChildren().addAll(yes, no);
+        for (String line : recentLogLines) {
+            if (line.contains("=== Scoreboard ===")) {
+                inBoard = true;
+                result.clear(); // keep only the most recent scoreboard
+                continue;
+            }
+            if (inBoard) {
+                // Scoreboard entries start with two spaces; a blank line or
+                // separator marks the end of the block.
+                if (line.startsWith("  ") && !line.isBlank()) {
+                    result.add(line.trim());
+                } else if (!line.isBlank()) {
+                    inBoard = false;
+                }
+            }
+        }
+        return result;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -339,38 +366,89 @@ public class GameTableView extends StackPane {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
+    // Dialog shell builders - shared structure for both modals
     // ─────────────────────────────────────────────────────────────────────────
 
-    private void clearDynamicContent() {
-        if (inputArea.getChildren().size() > 1)
-            inputArea.getChildren().subList(1, inputArea.getChildren().size()).clear();
+    private VBox dialogShell() {
+        VBox box = new VBox(0);
+        box.setMaxWidth(360);
+        box.setMaxHeight(Region.USE_PREF_SIZE);
+        box.setAlignment(Pos.TOP_LEFT);
+        box.setStyle(
+            "-fx-background-color: #1e1e1e; "
+            + "-fx-background-radius: 10; "
+            + "-fx-border-color: #444444; "
+            + "-fx-border-radius: 10; "
+            + "-fx-border-width: 1; "
+            + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.8), 24, 0, 0, 6);"
+        );
+        return box;
     }
 
-    /**
-     * Builds a color swatch button for the modal grid.
-     * Uses a hover effect by toggling inline style on enter/exit.
-     */
+    private Label dialogHeader(String text) {
+        Label l = new Label(text);
+        l.setMaxWidth(Double.MAX_VALUE);
+        l.setStyle(
+            "-fx-text-fill: #e0e0e0; "
+            + "-fx-font-family: Monospaced; "
+            + "-fx-font-weight: bold; "
+            + "-fx-font-size: 17px; "
+            + "-fx-padding: 22 24 8 24;"
+        );
+        return l;
+    }
+
+    private Label dialogSub(String text) {
+        Label l = new Label(text);
+        l.setWrapText(true);
+        l.setMaxWidth(Double.MAX_VALUE);
+        l.setStyle(
+            "-fx-text-fill: #888888; "
+            + "-fx-font-family: Monospaced; "
+            + "-fx-font-size: 11px; "
+            + "-fx-padding: 0 24 14 24;"
+        );
+        return l;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Widget helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** color swatch for the color picker modal. */
     private Button buildSwatch(String label, String bgActive, String bgDim) {
         Button btn = new Button(label);
         btn.setPrefSize(130, 72);
         btn.setFont(Font.font("Monospaced", FontWeight.BOLD, 14));
+        String base  = "-fx-background-color: " + bgDim
+                + "; -fx-text-fill: rgba(255,255,255,0.85)"
+                + "; -fx-background-radius: 6; -fx-cursor: hand;";
+        String hover = "-fx-background-color: " + bgActive
+                + "; -fx-text-fill: #ffffff"
+                + "; -fx-background-radius: 6; -fx-cursor: hand;"
+                + "; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 8, 0, 0, 2);";
+        btn.setStyle(base);
+        btn.setOnMouseEntered(e -> btn.setStyle(hover));
+        btn.setOnMouseExited (e -> btn.setStyle(base));
+        return btn;
+    }
 
-        String baseStyle =
-            "-fx-background-color: " + bgDim + "; "
-            + "-fx-text-fill: rgba(255,255,255,0.85); "
-            + "-fx-background-radius: 6; "
-            + "-fx-cursor: hand;";
-        String hoverStyle =
-            "-fx-background-color: " + bgActive + "; "
-            + "-fx-text-fill: #ffffff; "
-            + "-fx-background-radius: 6; "
-            + "-fx-cursor: hand; "
-            + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 8, 0, 0, 2);";
-
-        btn.setStyle(baseStyle);
-        btn.setOnMouseEntered(e -> btn.setStyle(hoverStyle));
-        btn.setOnMouseExited(e  -> btn.setStyle(baseStyle));
+    /** Full-width action button for the play-again modal. */
+    private Button buildActionButton(String label, String bgDim, String bgHover) {
+        Button btn = new Button(label);
+        btn.setPrefWidth(156);
+        btn.setPrefHeight(44);
+        btn.setFont(Font.font("Monospaced", FontWeight.BOLD, 13));
+        String base  = "-fx-background-color: " + bgDim
+                + "; -fx-text-fill: #dddddd"
+                + "; -fx-background-radius: 6; -fx-cursor: hand;";
+        String hover = "-fx-background-color: " + bgHover
+                + "; -fx-text-fill: #ffffff"
+                + "; -fx-background-radius: 6; -fx-cursor: hand;"
+                + "; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 6, 0, 0, 2);";
+        btn.setStyle(base);
+        btn.setOnMouseEntered(e -> btn.setStyle(hover));
+        btn.setOnMouseExited (e -> btn.setStyle(base));
         return btn;
     }
 
@@ -395,6 +473,11 @@ public class GameTableView extends StackPane {
             + "-fx-padding: 6 10 6 10; "
             + "-fx-cursor: hand;"
         );
+    }
+
+    private void clearDynamicContent() {
+        if (inputArea.getChildren().size() > 1)
+            inputArea.getChildren().subList(1, inputArea.getChildren().size()).clear();
     }
 
     private String cardBgColor(Card card) {

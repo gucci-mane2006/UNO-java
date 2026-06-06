@@ -136,8 +136,11 @@ public class GameController {
         for (Player p: players) {
             p.clearHand();
         }
+        
         // Fresh state and deck for each round
+        roundNumber++;
         state = new GameState(players);
+        state.setRoundNumber(roundNumber);
         deck  = new Deck();
  
         dealHands();
@@ -404,6 +407,10 @@ public class GameController {
         boolean anyHuman = false;
         for (Player p : players) {
             if (p instanceof PlayerHuman human) {
+                if (human.getInputHandler() == observer) {
+                    anyHuman = true;
+                    continue;
+                }
                 human.getInputHandler().showMessage(message);
                 anyHuman = true;
             }
