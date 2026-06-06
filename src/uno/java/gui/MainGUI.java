@@ -223,7 +223,7 @@ public class MainGUI extends Application {
         }
     }
 
-    /** Collects and validates player data from the slot rows. Returns null on error. */
+    // Collects and validates player data from the slot rows. Returns null on error
     private List<Player> collectPlayers(VBox slotArea) {
         List<Player> players = new ArrayList<>();
         int aiCount = 0;
